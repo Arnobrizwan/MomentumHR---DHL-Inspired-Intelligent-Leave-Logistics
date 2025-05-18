@@ -1,0 +1,36 @@
+name: dhl_leave_management
+description: DHL Employee Leave Management System
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.5
+  firebase_core: ^2.15.1
+  firebase_auth: ^4.7.3
+  cloud_firestore: ^4.8.5
+  firebase_storage: ^11.2.6
+  provider: ^6.0.5
+  intl: ^0.18.1
+  flutter_datetime_picker_plus: ^2.1.0
+  flutter_svg: ^2.0.7
+  file_picker: ^5.3.3
+  google_fonts: ^5.1.0
+  fl_chart: ^0.63.0
+  http: ^1.1.0
+  data_table_2: ^2.5.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.2
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
