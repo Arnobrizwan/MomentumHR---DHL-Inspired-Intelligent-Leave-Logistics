@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:dhl_leave_management/screens/password_reset_screen.dart';
 
 class FirstTimePasswordChangeScreen extends StatefulWidget {
   final String email;
@@ -21,7 +20,7 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
   final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  
+
   bool _isLoading = false;
   String? _errorMessage;
   bool _obscureCurrentPassword = true;
@@ -39,39 +38,32 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
 
   Future<void> _changePassword() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (_newPasswordController.text != _confirmPasswordController.text) {
       setState(() {
         _errorMessage = 'New passwords do not match.';
       });
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-    
+
     try {
-      // Get current user
       final user = FirebaseAuth.instance.currentUser;
-      
-      if (user == null) {
-        throw Exception('No authenticated user found.');
-      }
-      
-      // Create credentials with the user's email and current password
-      AuthCredential credential = EmailAuthProvider.credential(
+
+      if (user == null) throw Exception('No authenticated user found.');
+
+      final credential = EmailAuthProvider.credential(
         email: widget.email,
         password: _currentPasswordController.text,
       );
-      
-      // Re-authenticate the user
+
       await user.reauthenticateWithCredential(credential);
-      
-      // Change the password
       await user.updatePassword(_newPasswordController.text);
-      
+
       setState(() {
         _isLoading = false;
         _passwordChanged = true;
@@ -83,19 +75,19 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
             _errorMessage = 'The current password is incorrect.';
             break;
           case 'user-mismatch':
-            _errorMessage = 'The provided credentials do not match the current user.';
+            _errorMessage = 'The credentials do not match the current user.';
             break;
           case 'user-not-found':
             _errorMessage = 'No user found with this email.';
             break;
           case 'invalid-credential':
-            _errorMessage = 'Invalid credentials. Please try again.';
+            _errorMessage = 'Invalid credentials.';
             break;
           case 'weak-password':
             _errorMessage = 'The new password is too weak.';
             break;
           case 'requires-recent-login':
-            _errorMessage = 'This operation requires recent authentication. Please log in again.';
+            _errorMessage = 'This requires recent login. Please re-login.';
             break;
           default:
             _errorMessage = e.message ?? 'Failed to change password.';
@@ -118,19 +110,15 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
         builder: (context, constraints) {
           return SingleChildScrollView(
             child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight,
-              ),
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: IntrinsicHeight(
                 child: Column(
                   children: [
-                    // Top yellow banner
                     Container(
                       width: double.infinity,
                       height: 15,
-                      color: const Color(0xFFFFCC00), // DHL Yellow
+                      color: const Color(0xFFFFCC00),
                     ),
-                    
                     Expanded(
                       child: Center(
                         child: Container(
@@ -140,7 +128,6 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              // DHL Logo
                               Container(
                                 alignment: Alignment.center,
                                 margin: const EdgeInsets.only(bottom: 32),
@@ -149,10 +136,8 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
                                   height: 70,
                                 ),
                               ),
-                              
-                              // Title
                               const Text(
-                                'Change Your Password',
+                                'Change Password',
                                 style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w600,
@@ -161,7 +146,6 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 16),
-                              
                               _passwordChanged
                                   ? _buildSuccessMessage()
                                   : _buildChangePasswordForm(),
@@ -170,24 +154,20 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
                         ),
                       ),
                     ),
-                    
-                    // Footer
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       color: Colors.grey[200],
                       child: Column(
-                        children: [
-                          const Text(
+                        children: const [
+                          Text(
                             'Version 1.0.0',
                             style: TextStyle(color: Color(0xFF666666), fontSize: 12),
-                            textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
+                          SizedBox(height: 4),
+                          Text(
                             '© 2025 DHL Express. All rights reserved.',
                             style: TextStyle(color: Color(0xFF666666), fontSize: 12),
-                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),
@@ -214,11 +194,7 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
           ),
           child: Column(
             children: [
-              const Icon(
-                Icons.check_circle_outline,
-                color: Colors.green,
-                size: 50,
-              ),
+              const Icon(Icons.check_circle_outline, color: Colors.green, size: 50),
               const SizedBox(height: 16),
               const Text(
                 'Password Changed Successfully',
@@ -231,10 +207,8 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
               ),
               const SizedBox(height: 12),
               Text(
-                'Your password has been changed successfully. You can now continue using your account with your new password.',
-                style: TextStyle(
-                  color: Colors.grey[800],
-                ),
+                'You can now use your new password to continue using your account.',
+                style: TextStyle(color: Colors.grey[800]),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -246,20 +220,15 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
             Navigator.of(context).pop();
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFD40511), // DHL Red
+            backgroundColor: const Color(0xFFD40511),
             elevation: 0,
             padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(0),
-            ),
             minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
           ),
           child: const Text(
             'Continue to Dashboard',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -273,141 +242,43 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Please change your password to continue.',
-            style: TextStyle(
-              color: Colors.grey[700],
-              fontSize: 14,
-            ),
+            'Update your password below.',
+            style: TextStyle(color: Colors.grey[700], fontSize: 14),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          
-          // Current Password Field
-          TextFormField(
+          _buildPasswordField(
             controller: _currentPasswordController,
-            decoration: InputDecoration(
-              hintText: 'Current Password',
-              prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFD40511)),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 16),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureCurrentPassword ? Icons.visibility : Icons.visibility_off,
-                  color: const Color(0xFF666666),
-                ),
-                onPressed: () => setState(() => _obscureCurrentPassword = !_obscureCurrentPassword),
-              ),
-            ),
-            obscureText: _obscureCurrentPassword,
-            validator: (v) {
-              if (v == null || v.isEmpty) {
-                return 'Please enter your current password';
-              }
-              return null;
-            },
+            hint: 'Current Password',
+            obscure: _obscureCurrentPassword,
+            toggle: () => setState(() => _obscureCurrentPassword = !_obscureCurrentPassword),
+            icon: Icons.lock_outline,
+            validator: (v) => v == null || v.isEmpty ? 'Please enter your current password' : null,
           ),
           const SizedBox(height: 16),
-          
-          // New Password Field
-          TextFormField(
+          _buildPasswordField(
             controller: _newPasswordController,
-            decoration: InputDecoration(
-              hintText: 'New Password',
-              prefixIcon: const Icon(Icons.lock, color: Color(0xFFD40511)),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 16),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureNewPassword ? Icons.visibility : Icons.visibility_off,
-                  color: const Color(0xFF666666),
-                ),
-                onPressed: () => setState(() => _obscureNewPassword = !_obscureNewPassword),
-              ),
-            ),
-            obscureText: _obscureNewPassword,
+            hint: 'New Password',
+            obscure: _obscureNewPassword,
+            toggle: () => setState(() => _obscureNewPassword = !_obscureNewPassword),
+            icon: Icons.lock,
             validator: (v) {
-              if (v == null || v.isEmpty) {
-                return 'Please enter a new password';
-              }
-              if (v.length < 6) {
-                return 'Password must be at least 6 characters';
-              }
-              if (v == _currentPasswordController.text) {
-                return 'New password must be different from current password';
-              }
+              if (v == null || v.isEmpty) return 'Please enter a new password';
+              if (v.length < 6) return 'Password must be at least 6 characters';
+              if (v == _currentPasswordController.text) return 'New password must be different';
               return null;
             },
           ),
           const SizedBox(height: 16),
-          
-          // Confirm Password Field
-          TextFormField(
+          _buildPasswordField(
             controller: _confirmPasswordController,
-            decoration: InputDecoration(
-              hintText: 'Confirm New Password',
-              prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFD40511)),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(4),
-                borderSide: BorderSide.none,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 16),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
-                  color: const Color(0xFF666666),
-                ),
-                onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-              ),
-            ),
-            obscureText: _obscureConfirmPassword,
-            validator: (v) {
-              if (v == null || v.isEmpty) {
-                return 'Please confirm your new password';
-              }
-              if (v != _newPasswordController.text) {
-                return 'Passwords do not match';
-              }
-              return null;
-            },
+            hint: 'Confirm New Password',
+            obscure: _obscureConfirmPassword,
+            toggle: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+            icon: Icons.lock_outline,
+            validator: (v) =>
+                v != _newPasswordController.text ? 'Passwords do not match' : null,
           ),
-          
-          // Error Message
           if (_errorMessage != null) ...[
             const SizedBox(height: 16),
             Container(
@@ -431,95 +302,58 @@ class _FirstTimePasswordChangeScreenState extends State<FirstTimePasswordChangeS
               ),
             ),
           ],
-          
           const SizedBox(height: 24),
-          
-          // Change Password Button
           ElevatedButton(
             onPressed: _isLoading ? null : _changePassword,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD40511), // DHL Red
+              backgroundColor: const Color(0xFFD40511),
               disabledBackgroundColor: const Color(0xFFD40511).withOpacity(0.6),
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(0),
-              ),
               minimumSize: const Size(double.infinity, 50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
             ),
             child: _isLoading
                 ? const SizedBox(
                     width: 24,
                     height: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                   )
                 : const Text(
                     'Change Password',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Cancel Button - Skip for now
-          TextButton(
-            onPressed: () {
-              // Show confirmation dialog
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text(
-                    'Skip Password Change?',
-                    style: TextStyle(
-                      color: Color(0xFFD40511),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  content: const Text(
-                    'It is recommended to change your password for security reasons. Are you sure you want to skip this step?',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF666666),
-                      ),
-                      child: const Text('No, I\'ll Change It'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(ctx).pop();
-                        Navigator.of(context).pop();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD40511),
-                        elevation: 0,
-                      ),
-                      child: const Text('Yes, Skip For Now'),
-                    ),
-                  ],
-                ),
-              );
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF666666),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-            ),
-            child: const Text(
-              'Skip for Now',
-              style: TextStyle(
-                fontWeight: FontWeight.w400,
-                fontSize: 14,
-              ),
-            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordField({
+    required TextEditingController controller,
+    required String hint,
+    required bool obscure,
+    required VoidCallback toggle,
+    required IconData icon,
+    required String? Function(String?) validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      validator: validator,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: Icon(icon, color: const Color(0xFFD40511)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        suffixIcon: IconButton(
+          icon: Icon(obscure ? Icons.visibility : Icons.visibility_off, color: const Color(0xFF666666)),
+          onPressed: toggle,
+        ),
       ),
     );
   }

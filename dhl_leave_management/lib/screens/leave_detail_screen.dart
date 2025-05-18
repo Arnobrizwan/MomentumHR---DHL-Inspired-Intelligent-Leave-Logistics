@@ -22,6 +22,7 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
   bool _isLoading = true;
   bool _isProcessing = false;
   bool _isHR = false;
+  bool _authChecked = false;
   Map<String, dynamic>? _leaveData;
   String? _rejectReason;
   String? _employeeEmail;
@@ -29,8 +30,42 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _checkIfHR();
-    _loadLeaveData();
+    _checkAuthentication();
+  }
+  
+  Future<void> _checkAuthentication() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      print('No authenticated user found');
+      setState(() {
+        _isLoading = false;
+        _authChecked = true;
+      });
+      
+      // Show authentication error
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You need to be logged in to view leave details'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
+          ),
+        );
+        
+        // Return to previous screen after delay
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) Navigator.of(context).pop();
+        });
+      });
+      return;
+    }
+    
+    print('Authenticated user: ${user.uid}, email: ${user.email}');
+    _authChecked = true;
+    
+    // Continue with regular initialization
+    await _checkIfHR();
+    await _loadLeaveData();
   }
   
   Future<void> _checkIfHR() async {
@@ -42,46 +77,78 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
           setState(() {
             _isHR = userDoc.data()?['userType'] == 'HR_ADMIN';
           });
+          print('User is HR Admin: $_isHR');
+        } else {
+          print('User document not found: ${user.uid}');
         }
       }
     } catch (e) {
+      print('Error checking HR status: $e');
       // Continue with default value (false) if error occurs
     }
   }
   
   Future<void> _loadLeaveData() async {
+    if (!_authChecked) {
+      print('Skipping data load - authentication not checked');
+      return;
+    }
+    
     try {
+      print('Loading leave data for ID: ${widget.leaveId}');
+      
+      // Test Firestore access first
+      try {
+        final testQuery = await _firestore.collection('leaveApplications').limit(1).get();
+        print('Firestore test query successful. Documents: ${testQuery.docs.length}');
+      } catch (testError) {
+        print('Firestore test query failed: $testError');
+        throw Exception('Database access error. Please try again later.');
+      }
+      
       final leaveDoc = await _firestore.collection('leaveApplications').doc(widget.leaveId).get();
       
       if (!leaveDoc.exists) {
+        print('Leave document not found: ${widget.leaveId}');
         setState(() {
           _isLoading = false;
         });
         return;
       }
       
+      print('Leave document found: ${leaveDoc.id}');
+      print('Document data: ${leaveDoc.data()}');
+      
       // Get employee email
       final employeeId = leaveDoc.data()?['employeeId'];
       if (employeeId != null) {
         // First try to get it from users collection
-        final userQuery = await _firestore
-            .collection('users')
-            .where('employeeId', isEqualTo: employeeId)
-            .limit(1)
-            .get();
-        
-        if (userQuery.docs.isNotEmpty) {
-          setState(() {
-            _employeeEmail = userQuery.docs.first.data()['email'];
-          });
-        } else {
-          // If not found, try to get from employees collection
-          final employeeDoc = await _firestore.collection('employees').doc(employeeId).get();
-          if (employeeDoc.exists) {
+        try {
+          final userQuery = await _firestore
+              .collection('users')
+              .where('employeeId', isEqualTo: employeeId)
+              .limit(1)
+              .get();
+          
+          if (userQuery.docs.isNotEmpty) {
             setState(() {
-              _employeeEmail = employeeDoc.data()?['email'];
+              _employeeEmail = userQuery.docs.first.data()['email'];
             });
+            print('Found employee email from users collection: $_employeeEmail');
+          } else {
+            // If not found, try to get from employees collection
+            final employeeDoc = await _firestore.collection('employees').doc(employeeId).get();
+            if (employeeDoc.exists) {
+              setState(() {
+                _employeeEmail = employeeDoc.data()?['email'];
+              });
+              print('Found employee email from employees collection: $_employeeEmail');
+            } else {
+              print('Employee document not found: $employeeId');
+            }
           }
+        } catch (emailError) {
+          print('Error fetching employee email: $emailError');
         }
       }
       
@@ -89,7 +156,9 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
         _leaveData = leaveDoc.data();
         _isLoading = false;
       });
+      
     } catch (e) {
+      print('Error loading leave data: $e');
       setState(() {
         _isLoading = false;
       });
@@ -116,13 +185,21 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
     });
     
     try {
-      // Update leave status
-      await _firestore.collection('leaveApplications').doc(widget.leaveId).update({
+      print('Updating leave status to: $status');
+      
+      final updateData = {
         'status': status,
         'updatedAt': Timestamp.now(),
         'updatedBy': _auth.currentUser?.uid,
-        if (status == 'Rejected') 'rejectReason': _rejectReason,
-      });
+      };
+      
+      if (status == 'Rejected' && _rejectReason != null) {
+        updateData['rejectReason'] = _rejectReason;
+      }
+      
+      // Update leave status
+      await _firestore.collection('leaveApplications').doc(widget.leaveId).update(updateData);
+      print('Leave status updated successfully');
       
       setState(() {
         if (_leaveData != null) {
@@ -143,6 +220,7 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
         );
       }
     } catch (e) {
+      print('Error updating leave status: $e');
       setState(() {
         _isProcessing = false;
       });
@@ -171,8 +249,11 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
     });
     
     try {
+      print('Canceling leave application: ${widget.leaveId}');
+      
       // Delete the leave application
       await _firestore.collection('leaveApplications').doc(widget.leaveId).delete();
+      print('Leave application canceled successfully');
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -185,6 +266,7 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
         Navigator.of(context).pop();
       }
     } catch (e) {
+      print('Error canceling leave application: $e');
       setState(() {
         _isProcessing = false;
       });
@@ -319,228 +401,312 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                 color: Color(0xFFD40511), // DHL Red
               ),
             )
-          : _leaveData == null
-              ? const Center(
-                  child: Text('Leave application not found'),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
+          : !_authChecked || _auth.currentUser == null
+              ? Center(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Status Card
-                      Card(
-                        elevation: 3,
-                        color: _getStatusColor(_leaveData!['status']).withOpacity(0.1),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                            color: _getStatusColor(_leaveData!['status']),
-                            width: 1,
+                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Authentication Required',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text('You need to be logged in to view leave details'),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD40511)),
+                        child: const Text('Return to Login'),
+                      ),
+                    ],
+                  ),
+                )
+              : _leaveData == null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.search_off, size: 64, color: Colors.grey),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Leave Application Not Found',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Icon(
-                                _getStatusIcon(_leaveData!['status']),
+                          const SizedBox(height: 8),
+                          Text(
+                            'ID: ${widget.leaveId}',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD40511)),
+                            child: const Text('Go Back'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Status Card
+                          Card(
+                            elevation: 3,
+                            color: _getStatusColor(_leaveData!['status']).withOpacity(0.1),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(
                                 color: _getStatusColor(_leaveData!['status']),
-                                size: 40,
+                                width: 1,
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _leaveData!['status'],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _getStatusIcon(_leaveData!['status']),
+                                    color: _getStatusColor(_leaveData!['status']),
+                                    size: 40,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _leaveData!['status'],
+                                          style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: _getStatusColor(_leaveData!['status']),
+                                          ),
+                                        ),
+                                        if (_leaveData!['status'] == 'Rejected' && _leaveData!['rejectReason'] != null) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Reason: ${_leaveData!['rejectReason']}',
+                                            style: const TextStyle(
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Employee Information
+                          Card(
+                            elevation: 2,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Employee Information',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildInfoRow(
+                                    icon: Icons.person,
+                                    label: 'Name',
+                                    value: _leaveData!['employeeName'] ?? 'Unknown',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow(
+                                    icon: Icons.badge,
+                                    label: 'Employee ID',
+                                    value: _leaveData!['employeeId'] ?? 'Unknown',
+                                  ),
+                                  if (_employeeEmail != null) ...[
+                                    const SizedBox(height: 8),
+                                    _buildInfoRow(
+                                      icon: Icons.email,
+                                      label: 'Email',
+                                      value: _employeeEmail!,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Leave Details
+                          Card(
+                            elevation: 2,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Leave Details',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildInfoRow(
+                                    icon: Icons.category,
+                                    label: 'Leave Type',
+                                    value: _leaveData!['leaveType'] ?? 'Unknown',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow(
+                                    icon: Icons.calendar_today,
+                                    label: 'Duration',
+                                    value: '${_calculateLeaveDuration()} working day(s)',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow(
+                                    icon: Icons.date_range,
+                                    label: 'Start Date',
+                                    value: _leaveData!['startDate'] != null 
+                                      ? DateFormat('EEEE, MMMM d, yyyy').format(
+                                          (_leaveData!['startDate'] as Timestamp).toDate(),
+                                        )
+                                      : 'Unknown',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow(
+                                    icon: Icons.date_range,
+                                    label: 'End Date',
+                                    value: _leaveData!['endDate'] != null
+                                      ? DateFormat('EEEE, MMMM d, yyyy').format(
+                                          (_leaveData!['endDate'] as Timestamp).toDate(),
+                                        )
+                                      : 'Unknown',
+                                  ),
+                                  if (_leaveData!['reason'] != null) ...[
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'Reason for Leave',
                                       style: TextStyle(
-                                        fontSize: 20,
                                         fontWeight: FontWeight.bold,
-                                        color: _getStatusColor(_leaveData!['status']),
                                       ),
                                     ),
-                                    if (_leaveData!['status'] == 'Rejected' && _leaveData!['rejectReason'] != null) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Reason: ${_leaveData!['rejectReason']}',
-                                        style: const TextStyle(
-                                          fontStyle: FontStyle.italic,
-                                        ),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                    ],
+                                      child: Text(_leaveData!['reason']),
+                                    ),
                                   ],
-                                ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      
-                      // Employee Information
-                      Card(
-                        elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Employee Information',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          const SizedBox(height: 16),
+                          
+                          // Application Timeline
+                          Card(
+                            elevation: 2,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Application Timeline',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildTimelineItem(
+                                    title: 'Application Submitted',
+                                    date: _leaveData!['createdAt'] != null 
+                                      ? (_leaveData!['createdAt'] as Timestamp).toDate()
+                                      : null,
+                                    isCompleted: true,
+                                  ),
+                                  _buildTimelineItem(
+                                    title: 'Status: ${_leaveData!['status']}',
+                                    date: _leaveData!['updatedAt'] != null
+                                        ? (_leaveData!['updatedAt'] as Timestamp).toDate()
+                                        : null,
+                                    isCompleted: _leaveData!['status'] != 'Pending',
+                                    isLast: true,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 16),
-                              _buildInfoRow(
-                                icon: Icons.person,
-                                label: 'Name',
-                                value: _leaveData!['employeeName'],
-                              ),
-                              const SizedBox(height: 8),
-                              _buildInfoRow(
-                                icon: Icons.badge,
-                                label: 'Employee ID',
-                                value: _leaveData!['employeeId'],
-                              ),
-                              if (_employeeEmail != null) ...[
-                                const SizedBox(height: 8),
-                                _buildInfoRow(
-                                  icon: Icons.email,
-                                  label: 'Email',
-                                  value: _employeeEmail!,
-                                ),
-                              ],
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Leave Details
-                      Card(
-                        elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Leave Details',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          
+                          // HR Actions
+                          if (_isHR && _leaveData!['status'] == 'Pending') ...[
+                            const SizedBox(height: 32),
+                            const Text(
+                              'HR Actions',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
                               ),
-                              const SizedBox(height: 16),
-                              _buildInfoRow(
-                                icon: Icons.category,
-                                label: 'Leave Type',
-                                value: _leaveData!['leaveType'],
-                              ),
-                              const SizedBox(height: 8),
-                              _buildInfoRow(
-                                icon: Icons.calendar_today,
-                                label: 'Duration',
-                                value: '${_calculateLeaveDuration()} working day(s)',
-                              ),
-                              const SizedBox(height: 8),
-                              _buildInfoRow(
-                                icon: Icons.date_range,
-                                label: 'Start Date',
-                                value: DateFormat('EEEE, MMMM d, yyyy').format(
-                                  (_leaveData!['startDate'] as Timestamp).toDate(),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              _buildInfoRow(
-                                icon: Icons.date_range,
-                                label: 'End Date',
-                                value: DateFormat('EEEE, MMMM d, yyyy').format(
-                                  (_leaveData!['endDate'] as Timestamp).toDate(),
-                                ),
-                              ),
-                              if (_leaveData!['reason'] != null) ...[
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'Reason for Leave',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isProcessing
+                                        ? null
+                                        : () => _updateLeaveStatus('Rejected'),
+                                    icon: const Icon(Icons.close),
+                                    label: const Text('Reject'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isProcessing
+                                        ? null
+                                        : () => _updateLeaveStatus('Approved'),
+                                    icon: const Icon(Icons.check),
+                                    label: const Text('Approve'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
                                   ),
-                                  child: Text(_leaveData!['reason']),
                                 ),
                               ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Application Timeline
-                      Card(
-                        elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Application Timeline',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              _buildTimelineItem(
-                                title: 'Application Submitted',
-                                date: (_leaveData!['createdAt'] as Timestamp).toDate(),
-                                isCompleted: true,
-                              ),
-                              _buildTimelineItem(
-                                title: 'Status: ${_leaveData!['status']}',
-                                date: _leaveData!['updatedAt'] != null
-                                    ? (_leaveData!['updatedAt'] as Timestamp).toDate()
-                                    : null,
-                                isCompleted: _leaveData!['status'] != 'Pending',
-                                isLast: true,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      
-                      // HR Actions
-                      if (_isHR && _leaveData!['status'] == 'Pending') ...[
-                        const SizedBox(height: 32),
-                        const Text(
-                          'HR Actions',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
+                            ),
+                          ],
+                          
+                          // Employee Actions
+                          if (!_isHR && _leaveData!['status'] == 'Pending') ...[
+                            const SizedBox(height: 32),
+                            SizedBox(
+                              width: double.infinity,
                               child: ElevatedButton.icon(
-                                onPressed: _isProcessing
-                                    ? null
-                                    : () => _updateLeaveStatus('Rejected'),
-                                icon: const Icon(Icons.close),
-                                label: const Text('Reject'),
+                                onPressed: _isProcessing ? null : _cancelLeaveApplication,
+                                icon: const Icon(Icons.delete),
+                                label: const Text('Cancel Leave Application'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
@@ -548,45 +714,10 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _isProcessing
-                                    ? null
-                                    : () => _updateLeaveStatus('Approved'),
-                                icon: const Icon(Icons.check),
-                                label: const Text('Approve'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                              ),
-                            ),
                           ],
-                        ),
-                      ],
-                      
-                      // Employee Actions
-                      if (!_isHR && _leaveData!['status'] == 'Pending') ...[
-                        const SizedBox(height: 32),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _isProcessing ? null : _cancelLeaveApplication,
-                            icon: const Icon(Icons.delete),
-                            label: const Text('Cancel Leave Application'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                        ],
+                      ),
+                    ),
     );
   }
   

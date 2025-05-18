@@ -12,7 +12,6 @@ class FirebaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // Leave Applications
   // ────────────────────────────────────────────────────────────────────────────
-
   // Get all leave applications
   Stream<List<LeaveApplication>> getAllLeaveApplications() {
     return _firestore
@@ -41,14 +40,12 @@ class FirebaseService {
       yield [];
       return;
     }
-
     final userDoc = await _firestore.collection('users').doc(user.uid).get();
     final employeeId = userDoc.data()?['employeeId'] as String?;
     if (employeeId == null) {
       yield [];
       return;
     }
-
     yield* getEmployeeLeaveApplications(employeeId);
   }
 
@@ -72,7 +69,6 @@ class FirebaseService {
     // Using DateTime → millisecondsSinceEpoch is fine here
     final String leaveId =
         '${employeeId}_${startDate.millisecondsSinceEpoch}_${endDate.millisecondsSinceEpoch}';
-
     final existing = await _firestore
         .collection('leaveApplications')
         .doc(leaveId)
@@ -80,7 +76,6 @@ class FirebaseService {
     if (existing.exists) {
       throw Exception('A leave application already exists for these dates');
     }
-
     final data = {
       'employeeId': employeeId,
       'employeeName': employeeName,
@@ -93,12 +88,10 @@ class FirebaseService {
       'updatedAt': Timestamp.now(),
       'createdBy': _auth.currentUser?.uid,
     };
-
     await _firestore
         .collection('leaveApplications')
         .doc(leaveId)
         .set(data);
-
     return leaveId;
   }
 
@@ -126,22 +119,85 @@ class FirebaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // Employees
   // ────────────────────────────────────────────────────────────────────────────
-
+  // Get all employees
   Stream<QuerySnapshot> getAllEmployees() =>
       _firestore.collection('employees').snapshots();
-
+  
+  // Get employee by ID
   Future<DocumentSnapshot> getEmployee(String employeeId) =>
       _firestore.collection('employees').doc(employeeId).get();
+  
+  // Get employee by ID and return as Map
+  Future<Map<String, dynamic>?> getEmployeeById(String employeeId) async {
+    final doc = await _firestore.collection('employees').doc(employeeId).get();
+    if (doc.exists) {
+      return doc.data();
+    }
+    return null;
+  }
+  
+  // Add a new employee
+  Future<void> addEmployee({
+    required String id,
+    required String name,
+    required String department,
+    String? email,
+  }) async {
+    await _firestore.collection('employees').doc(id).set({
+      'id': id,
+      'name': name,
+      'department': department,
+      'email': email,
+      'createdAt': Timestamp.now(),
+      'updatedAt': Timestamp.now(),
+    });
+  }
+  
+  // Update employee
+  Future<void> updateEmployee({
+    required String id,
+    required String name,
+    required String department,
+    String? email,
+  }) async {
+    await _firestore.collection('employees').doc(id).update({
+      'name': name,
+      'department': department,
+      'email': email,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+  
+  // Delete employee
+  Future<void> deleteEmployee(String employeeId) async {
+    // First delete the employee
+    await _firestore.collection('employees').doc(employeeId).delete();
+    
+    // Then delete all leave applications for this employee
+    final leaveApplications = await _firestore
+        .collection('leaveApplications')
+        .where('employeeId', isEqualTo: employeeId)
+        .get();
+        
+    // Use a batch to delete multiple documents efficiently
+    if (leaveApplications.docs.isNotEmpty) {
+      final batch = _firestore.batch();
+      for (final doc in leaveApplications.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+  }
 
   Future<void> createOrUpdateEmployee(
-          String employeeId, Map<String, dynamic> data) async =>
+      String employeeId, Map<String, dynamic> data) async =>
       _firestore
           .collection('employees')
           .doc(employeeId)
           .set({
-            ...data,
-            'updatedAt': Timestamp.now(),
-          }, SetOptions(merge: true));
+        ...data,
+        'updatedAt': Timestamp.now(),
+      }, SetOptions(merge: true));
 
   Future<DocumentSnapshot?> getEmployeeByUserId(String userId) async {
     final qs = await _firestore
@@ -155,19 +211,18 @@ class FirebaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // Users
   // ────────────────────────────────────────────────────────────────────────────
-
   Future<DocumentSnapshot> getUser(String userId) =>
       _firestore.collection('users').doc(userId).get();
 
   Future<void> createOrUpdateUser(
-          String userId, Map<String, dynamic> data) async =>
+      String userId, Map<String, dynamic> data) async =>
       _firestore
           .collection('users')
           .doc(userId)
           .set({
-            ...data,
-            'updatedAt': Timestamp.now(),
-          }, SetOptions(merge: true));
+        ...data,
+        'updatedAt': Timestamp.now(),
+      }, SetOptions(merge: true));
 
   Future<QuerySnapshot> getAllHRUsers() => _firestore
       .collection('users')
@@ -177,9 +232,8 @@ class FirebaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // Storage
   // ────────────────────────────────────────────────────────────────────────────
-
   Future<String> uploadErrorScreenshot(
-          Uint8List screenshotBytes, String errorId) async {
+      Uint8List screenshotBytes, String errorId) async {
     final ref = _storage.ref('error_screenshots/$errorId.png');
     await ref.putData(screenshotBytes);
     return ref.getDownloadURL();
@@ -194,7 +248,6 @@ class FirebaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // Batch Import
   // ────────────────────────────────────────────────────────────────────────────
-
   Future<Map<String, dynamic>> batchImportEmployees(
       List<Map<String, dynamic>> employees) async {
     final batch = _firestore.batch();
@@ -221,19 +274,15 @@ class FirebaseService {
       List<Map<String, dynamic>> applications) async {
     final batch = _firestore.batch();
     int successCount = 0, duplicateCount = 0;
-
     for (var app in applications) {
       final employeeId = app['employeeId'] as String?;
       final startTs = app['startDate'] as Timestamp?;
       final endTs = app['endDate'] as Timestamp?;
-
       if (employeeId == null || startTs == null || endTs == null) continue;
-
       // ← FIX: convert Timestamp → DateTime → millis
       final startMs = startTs.toDate().millisecondsSinceEpoch;
       final endMs = endTs.toDate().millisecondsSinceEpoch;
-      final leaveId = '${employeeId}_$startMs\_$endMs';
-
+      final leaveId = '${employeeId}_${startMs}_${endMs}';
       final existing = await _firestore
           .collection('leaveApplications')
           .doc(leaveId)
@@ -242,7 +291,6 @@ class FirebaseService {
         duplicateCount++;
         continue;
       }
-
       batch.set(
         _firestore.collection('leaveApplications').doc(leaveId),
         {
@@ -253,10 +301,8 @@ class FirebaseService {
           'updatedAt': Timestamp.now(),
         },
       );
-
       successCount++;
     }
-
     await batch.commit();
     return {
       'success': true,
@@ -272,19 +318,16 @@ class FirebaseService {
     final snap = await _firestore.collection('leaveApplications').get();
     int pending = 0, approved = 0, rejected = 0;
     int annual = 0, medical = 0, emergency = 0;
-
     for (var doc in snap.docs) {
       final s = doc['status'] as String? ?? '';
       final t = doc['leaveType'] as String? ?? '';
       if (s == 'Pending') pending++;
       if (s == 'Approved') approved++;
       if (s == 'Rejected') rejected++;
-
       if (t.contains('Annual')) annual++;
       if (t.contains('Medical')) medical++;
       if (t.contains('Emergency')) emergency++;
     }
-
     return {
       'total': snap.docs.length,
       'status': {
@@ -306,22 +349,18 @@ class FirebaseService {
         .collection('leaveApplications')
         .where('employeeId', isEqualTo: employeeId)
         .get();
-
     int pending = 0, approved = 0, rejected = 0;
     int annual = 0, medical = 0, emergency = 0;
-
     for (var doc in snap.docs) {
       final s = doc['status'] as String? ?? '';
       final t = doc['leaveType'] as String? ?? '';
       if (s == 'Pending') pending++;
       if (s == 'Approved') approved++;
       if (s == 'Rejected') rejected++;
-
       if (t.contains('Annual')) annual++;
       if (t.contains('Medical')) medical++;
       if (t.contains('Emergency')) emergency++;
     }
-
     return {
       'total': snap.docs.length,
       'status': {
@@ -335,5 +374,56 @@ class FirebaseService {
         'emergency': emergency,
       },
     };
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Search and Filtering
+  // ────────────────────────────────────────────────────────────────────────────
+  
+  // Get filtered leave applications by status
+  Stream<List<LeaveApplication>> getLeaveApplicationsByStatus(String status) {
+    return _firestore
+        .collection('leaveApplications')
+        .where('status', isEqualTo: status)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => LeaveApplication.fromFirestore(doc)).toList());
+  }
+  
+  // Get leave applications by date range
+  Stream<List<LeaveApplication>> getLeaveApplicationsByDateRange(
+      DateTime startDate, DateTime endDate) {
+    final startTimestamp = Timestamp.fromDate(startDate);
+    final endTimestamp = Timestamp.fromDate(endDate);
+    
+    return _firestore
+        .collection('leaveApplications')
+        .where('startDate', isGreaterThanOrEqualTo: startTimestamp)
+        .where('startDate', isLessThanOrEqualTo: endTimestamp)
+        .orderBy('startDate')
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => LeaveApplication.fromFirestore(doc)).toList());
+  }
+  
+  // Search employees by name, ID or department
+  Future<List<DocumentSnapshot>> searchEmployees(String query) async {
+    query = query.toLowerCase();
+    
+    // Since Firestore doesn't support case-insensitive search directly,
+    // we need to fetch all employees and filter client-side
+    final snapshot = await _firestore.collection('employees').get();
+    
+    return snapshot.docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final name = (data['name'] as String? ?? '').toLowerCase();
+      final id = (data['id'] as String? ?? '').toLowerCase();
+      final department = (data['department'] as String? ?? '').toLowerCase();
+      
+      return name.contains(query) || 
+             id.contains(query) || 
+             department.contains(query);
+    }).toList();
   }
 }
