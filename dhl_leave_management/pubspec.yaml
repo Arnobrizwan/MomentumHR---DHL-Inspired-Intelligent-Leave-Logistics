@@ -1,6 +1,5 @@
 name: dhl_leave_management
 description: DHL Employee Leave Management System for Nina
-
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -11,26 +10,30 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.5
-  firebase_core: ^2.15.1
-  firebase_auth: ^4.7.3
-  cloud_firestore: ^4.8.5
-  firebase_storage: ^11.2.6
+  firebase_core: ^3.13.0
+  firebase_auth: ^5.5.3
+  cloud_firestore: ^5.6.7
+  firebase_storage: ^12.4.5
   provider: ^6.0.5
-  intl: ^0.18.1
+  intl: ^0.20.2
   flutter_datetime_picker_plus: ^2.1.0
-  file_picker: ^5.3.3
-  excel: ^2.1.0
-  google_fonts: ^5.1.0
-  fl_chart: ^0.63.0
+  file_picker: ^10.1.9
+  excel: ^4.0.6
+  google_fonts: ^6.2.1
+  fl_chart: ^1.0.0
   data_table_2: ^2.5.8
   http: ^1.1.0
+  flutter_svg: ^2.1.0
+  cached_network_image: ^3.2.3
+  image_picker: ^0.8.7+3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^2.0.2
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/
+    # - assets/images/
+    - assets/Employee_Leave_Data_v1.xlsx
