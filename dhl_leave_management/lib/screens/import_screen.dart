@@ -13,7 +13,8 @@ class ImportScreen extends StatefulWidget {
 
 class _ImportScreenState extends State<ImportScreen> {
   final ExcelImportUtility _excelImportUtility = ExcelImportUtility();
-  final String _assetFilePath = 'assets/data/Employee_Leave_Data_v1.xlsx';
+  // <-- Updated to match your pubspec.yaml
+  final String _assetFilePath = 'assets/Employee_Leave_Data_v1.xlsx';
 
   bool _isImporting = false;
   String _importStatus = '';
@@ -37,9 +38,9 @@ class _ImportScreenState extends State<ImportScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // DHL Logo
-                  Image.network(
-                    'https://upload.wikimedia.org/wikipedia/commons/a/ac/DHL_Logo.svg',
+                  // DHL Logo – now using your local PNG asset
+                  Image.asset(
+                    'assets/DHL_Express_logo_rgb.png',
                     height: 60,
                   ),
                   const SizedBox(height: 24),
@@ -120,7 +121,9 @@ class _ImportScreenState extends State<ImportScreen> {
                       _importStatus,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: _importStats != null ? Colors.green : Colors.orange,
+                        color: _importStats != null
+                            ? Colors.green
+                            : Colors.orange,
                       ),
                     ),
                   const SizedBox(height: 16),
