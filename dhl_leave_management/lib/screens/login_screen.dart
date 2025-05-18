@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dhl_leave_management/config/theme.dart';
 import 'package:dhl_leave_management/screens/dashboard_screen.dart';
 import 'package:dhl_leave_management/screens/employee_dashboard_screen.dart';
+import 'package:dhl_leave_management/screens/password_reset_screen.dart';
+import 'package:dhl_leave_management/screens/first_time_password_change_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,369 +30,345 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .get();
 
-      try {
-        // Authenticate with Firebase
-        UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
-        
-        // Check if user exists in Firestore
-        final userDoc = await FirebaseFirestore.instance
+      if (!userDoc.exists) {
+        // create default user
+        await FirebaseFirestore.instance
             .collection('users')
             .doc(userCredential.user!.uid)
-            .get();
-        
-        if (!userDoc.exists) {
-          // Create a default user document if it doesn't exist
-          // This might happen if user was created directly in Firebase Auth
-          await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-            'email': _emailController.text.trim(),
-            'userType': 'EMPLOYEE', // Default to employee
-            'createdAt': Timestamp.now(),
-          });
-          
-          // Fetch the newly created user document
-          final newUserDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userCredential.user!.uid)
-              .get();
-              
-          if (mounted) {
-            // Navigate to employee dashboard for default users
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()),
-            );
-          }
-          return;
-        }
-        
-        // Determine user type and navigate to appropriate screen
-        final userType = userDoc.data()?['userType'];
-        
-        if (mounted) {
-          if (userType == 'HR_ADMIN') {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const DashboardScreen()),
-            );
-          } else {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()),
-            );
-          }
-        }
-      } on FirebaseAuthException catch (e) {
-        setState(() {
-          if (e.code == 'user-not-found') {
-            _errorMessage = 'No user found with this email.';
-          } else if (e.code == 'wrong-password') {
-            _errorMessage = 'Wrong password provided.';
-          } else if (e.code == 'invalid-credential') {
-            _errorMessage = 'Invalid email or password.';
-          } else if (e.code == 'too-many-requests') {
-            _errorMessage = 'Too many attempts. Please try again later.';
-          } else {
-            _errorMessage = e.message ?? 'Authentication failed.';
-          }
-          _isLoading = false;
+            .set({
+          'email': _emailController.text.trim(),
+          'name': '',
+          'department': '',
+          'employeeId': '',
+          'userType': 'EMPLOYEE',
+          'createdAt': Timestamp.now(),
         });
-      } catch (e) {
-        setState(() {
-          _errorMessage = e.toString();
-          _isLoading = false;
-        });
+        
+        if (!mounted) return;
+        // Go directly to employee dashboard for new users
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const EmployeeDashboardScreen(),
+          ),
+        );
+        return;
       }
+
+      final userType = userDoc.data()?['userType'];
+      
+      if (!mounted) return;
+      
+      // Normal login flow - direct to appropriate dashboard
+      if (userType == 'HR_ADMIN') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const EmployeeDashboardScreen()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        switch (e.code) {
+          case 'user-not-found':
+            _errorMessage = 'No user found with this email.';
+            break;
+          case 'wrong-password':
+            _errorMessage = 'Wrong password provided.';
+            break;
+          case 'invalid-credential':
+            _errorMessage = 'Invalid email or password.';
+            break;
+          case 'too-many-requests':
+            _errorMessage = 'Too many attempts. Please try again later.';
+            break;
+          default:
+            _errorMessage = e.message ?? 'Authentication failed.';
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
     }
+  }
+
+  void _navigateToPasswordReset() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PasswordResetScreen(
+          email: _emailController.text.isEmpty ? null : _emailController.text,
+          isForgotPassword: true,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // DHL Logo
-                Image.network(
-                  'https://upload.wikimedia.org/wikipedia/commons/a/ac/DHL_Logo.svg',
-                  height: 60,
-                ),
-                const SizedBox(height: 40),
-                const Text(
-                  'Employee Leave Management',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 40),
-                
-                // Login Form
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Email Field
-                      TextFormField(
-                        controller: _emailController,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email),
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your email';
-                          }
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                            return 'Please enter a valid email';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Password Field
-                      TextFormField(
-                        controller: _passwordController,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock),
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                          ),
-                        ),
-                        obscureText: _obscurePassword,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your password';
-                          }
-                          if (value.length < 6) {
-                            return 'Password must be at least 6 characters';
-                          }
-                          return null;
-                        },
-                      ),
-                      
-                      // Error Message Display
-                      if (_errorMessage != null) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
+      backgroundColor: Colors.white,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
+              ),
+              child: IntrinsicHeight(
+                child: Column(
+                  children: [
+                    // Top yellow banner
+                    Container(
+                      width: double.infinity,
+                      height: 15,
+                      color: const Color(0xFFFFCC00), // DHL Yellow
+                    ),
+                    
+                    Expanded(
+                      child: Center(
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 400),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const Icon(Icons.error_outline, color: Colors.red),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _errorMessage!,
-                                  style: const TextStyle(
-                                    color: Colors.red,
-                                  ),
+                              // DHL Logo
+                              Container(
+                                alignment: Alignment.center,
+                                margin: const EdgeInsets.only(bottom: 32),
+                                child: Image.asset(
+                                  'assets/DHL_Express_logo_rgb.png',
+                                  height: 70, // Increased logo size
+                                ),
+                              ),
+                              // Title
+                              const Text(
+                                'Employee Leave Management',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF333333),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 36),
+                              
+                              // Login Form
+                              Form(
+                                key: _formKey,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    // Email Field
+                                    TextFormField(
+                                      controller: _emailController,
+                                      decoration: InputDecoration(
+                                        hintText: 'Email',
+                                        prefixIcon: const Icon(Icons.email, color: Color(0xFFD40511)),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(4),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(4),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(4),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                                      ),
+                                      keyboardType: TextInputType.emailAddress,
+                                      validator: (v) {
+                                        if (v == null || v.isEmpty) {
+                                          return 'Please enter your email';
+                                        }
+                                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                                            .hasMatch(v)) {
+                                          return 'Please enter a valid email';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 16),
+                                    
+                                    // Password Field
+                                    TextFormField(
+                                      controller: _passwordController,
+                                      decoration: InputDecoration(
+                                        hintText: 'Password',
+                                        prefixIcon: const Icon(Icons.lock, color: Color(0xFFD40511)),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(4),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(4),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(4),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                                        suffixIcon: IconButton(
+                                          icon: Icon(
+                                            _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                                            color: const Color(0xFF666666),
+                                          ),
+                                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                        ),
+                                      ),
+                                      obscureText: _obscurePassword,
+                                      validator: (v) {
+                                        if (v == null || v.isEmpty) {
+                                          return 'Please enter your password';
+                                        }
+                                        if (v.length < 6) {
+                                          return 'Password must be at least 6 characters';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+
+                                    // Error Message
+                                    if (_errorMessage != null) ...[
+                                      const SizedBox(height: 16),
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.red.shade200),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                _errorMessage!,
+                                                style: const TextStyle(color: Colors.red),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 24),
+
+                                    // Login Button
+                                    ElevatedButton(
+                                      onPressed: _isLoading ? null : _login,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFD40511), // DHL Red
+                                        disabledBackgroundColor: const Color(0xFFD40511).withOpacity(0.6),
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(0),
+                                        ),
+                                        minimumSize: const Size(double.infinity, 50),
+                                      ),
+                                      child: _isLoading
+                                          ? const SizedBox(
+                                              width: 24,
+                                              height: 24,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Text(
+                                              'Login',
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                    ),
+                                    
+                                    // Forgot Password
+                                    Align(
+                                      alignment: Alignment.center,
+                                      child: TextButton(
+                                        onPressed: _navigateToPasswordReset,
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          foregroundColor: const Color(0xFFD40511),
+                                        ),
+                                        child: const Text(
+                                          'Forgot Password?',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w400,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Login Button
-                      ElevatedButton(
-                        onPressed: _isLoading ? null : _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD40511), // DHL Red
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Login',
-                                style: TextStyle(fontSize: 16),
-                              ),
                       ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Forgot Password Link
-                      TextButton(
-                        onPressed: () {
-                          // Show password reset dialog
-                          showDialog(
-                            context: context,
-                            builder: (context) => _buildPasswordResetDialog(context),
-                          );
-                        },
-                        child: const Text('Forgot Password?'),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: 40),
-                
-                // Version and Copyright
-                const Text(
-                  'Version 1.0.0',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '© 2025 DHL Express. All rights reserved.',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-  
-  // Password Reset Dialog
-  Widget _buildPasswordResetDialog(BuildContext context) {
-    final TextEditingController resetEmailController = TextEditingController();
-    bool isLoading = false;
-    String? resetErrorMessage;
-    
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return AlertDialog(
-          title: const Text('Reset Password'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Enter your email address to receive a password reset link.'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: resetEmailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              if (resetErrorMessage != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  resetErrorMessage!,
-                  style: const TextStyle(color: Colors.red),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: isLoading ? null : () async {
-                if (resetEmailController.text.isEmpty) {
-                  setState(() {
-                    resetErrorMessage = 'Please enter your email';
-                  });
-                  return;
-                }
-                
-                setState(() {
-                  isLoading = true;
-                  resetErrorMessage = null;
-                });
-                
-                try {
-                  await FirebaseAuth.instance.sendPasswordResetEmail(
-                    email: resetEmailController.text.trim(),
-                  );
-                  
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
+                    ),
                     
-                    // Show success message
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Password reset email sent. Please check your inbox.'),
-                        backgroundColor: Colors.green,
+                    // Footer
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      color: Colors.grey[200],
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Version 1.0.0',
+                            style: TextStyle(color: Color(0xFF666666), fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            '© 2025 DHL Express. All rights reserved.',
+                            style: TextStyle(color: Color(0xFF666666), fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
-                    );
-                  }
-                } on FirebaseAuthException catch (e) {
-                  setState(() {
-                    resetErrorMessage = e.message ?? 'Failed to send reset email';
-                    isLoading = false;
-                  });
-                } catch (e) {
-                  setState(() {
-                    resetErrorMessage = e.toString();
-                    isLoading = false;
-                  });
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD40511), // DHL Red
+                    ),
+                  ],
+                ),
               ),
-              child: isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text('Send Reset Link'),
             ),
-          ],
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

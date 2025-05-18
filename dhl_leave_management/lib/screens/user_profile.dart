@@ -22,6 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _department = '';
   String _employeeId = '';
   String _userId = '';
+  String _createdAt = '';
   
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -66,29 +67,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
       
-      final userType = userDoc.data()?['userType'] ?? 'EMPLOYEE';
-      final employeeId = userDoc.data()?['employeeId'] ?? '';
-      final name = userDoc.data()?['name'] ?? 'User';
+      final userData = userDoc.data() ?? {};
+      final userType = userData['userType'] ?? 'EMPLOYEE';
+      final name = userData['name'] ?? 'User';
+      final department = userData['department'] ?? 'HR';
+      final createdAt = userData['createdAt'] as Timestamp?;
       
       setState(() {
         _userType = userType;
         _isHR = userType == 'HR_ADMIN';
         _name = name;
         _nameController.text = name;
+        _department = department;
+        _departmentController.text = department;
+        
+        if (createdAt != null) {
+          // Format date to readable string
+          _createdAt = _formatTimestamp(createdAt);
+        }
       });
       
-      if (employeeId.isNotEmpty) {
-        // Get employee document for additional details
-        final employeeDoc = await _firestore.collection('employees').doc(employeeId).get();
-        if (employeeDoc.exists) {
-          final department = employeeDoc.data()?['department'] ?? '';
-          
-          setState(() {
-            _employeeId = employeeId;
-            _department = department;
-            _departmentController.text = department;
-          });
-        }
+      // If we have an employeeId in the document, store it
+      if (userData.containsKey('employeeId') && userData['employeeId'] != null) {
+        setState(() {
+          _employeeId = userData['employeeId'];
+        });
       }
       
       setState(() {
@@ -110,6 +113,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
   
+  String _formatTimestamp(Timestamp timestamp) {
+    final date = timestamp.toDate();
+    return '${date.day}/${date.month}/${date.year} at ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+  
   Future<void> _updateProfile() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -120,24 +128,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
     
     try {
-      // Update user document
-      await _firestore.collection('users').doc(_userId).update({
+      final updateData = {
         'name': _nameController.text,
         'updatedAt': Timestamp.now(),
-      });
+      };
       
-      // Update employee document if exists
-      if (_employeeId.isNotEmpty) {
-        await _firestore.collection('employees').doc(_employeeId).update({
-          'name': _nameController.text,
-          'department': _departmentController.text,
-          'updatedAt': Timestamp.now(),
-        });
+      // Only update department if not HR
+      if (!_isHR) {
+        updateData['department'] = _departmentController.text;
       }
+      
+      // Update user document
+      await _firestore.collection('users').doc(_userId).update(updateData);
       
       setState(() {
         _name = _nameController.text;
-        _department = _departmentController.text;
+        if (!_isHR) {
+          _department = _departmentController.text;
+        }
         _isEditing = false;
         _isSaving = false;
       });
@@ -186,6 +194,97 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
   
+  void _showDocumentDialog(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFFD40511),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Text(content),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFD40511),
+              ),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+  void _showPrivacyPolicy() {
+    _showDocumentDialog(
+      'Privacy Policy',
+      'DHL Express Privacy Policy\n\n'
+      'Last updated: May 18, 2025\n\n'
+      'DHL Express ("we," "our," or "us") respects your privacy and is committed to protecting your personal data. This Privacy Policy explains how we collect, use, and share information about you when you use our Employee Leave Management System.\n\n'
+      '1. INFORMATION WE COLLECT\n\n'
+      'We collect information that you provide directly to us, such as your name, email address, employee ID, department, and other information you choose to provide.\n\n'
+      '2. HOW WE USE YOUR INFORMATION\n\n'
+      'We use the information we collect to:\n'
+      '• Provide, maintain, and improve our services\n'
+      '• Process and manage leave requests\n'
+      '• Communicate with you about your account and leave status\n'
+      '• Respond to your comments, questions, and requests\n'
+      '• Comply with applicable laws and regulations\n\n'
+      '3. DATA SECURITY\n\n'
+      'We implement appropriate security measures to protect your personal information from unauthorized access, alteration, disclosure, or destruction. However, no method of transmission over the Internet or electronic storage is 100% secure.\n\n'
+      '4. CONTACT US\n\n'
+      'If you have any questions about this Privacy Policy, please contact your HR department.'
+    );
+  }
+  
+  void _showTermsOfService() {
+    _showDocumentDialog(
+      'Terms of Service',
+      'DHL Express Terms of Service\n\n'
+      'Last updated: May 18, 2025\n\n'
+      'Welcome to the DHL Express Employee Leave Management System. By accessing or using our system, you agree to be bound by these Terms of Service.\n\n'
+      '1. ACCEPTANCE OF TERMS\n\n'
+      'By accessing or using the DHL Express Employee Leave Management System, you agree to these Terms of Service and to any additional terms and conditions that may apply.\n\n'
+      '2. USE OF THE SYSTEM\n\n'
+      'You may use the system only for legitimate purposes related to your employment with DHL Express. You agree not to use the system for any illegal or unauthorized purpose.\n\n'
+      '3. ACCOUNT SECURITY\n\n'
+      'You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to notify your HR department immediately of any unauthorized use of your account.\n\n'
+      '4. CONTACT US\n\n'
+      'If you have any questions about these Terms, please contact your HR department.'
+    );
+  }
+  
+  void _showHelpInfo() {
+    _showDocumentDialog(
+      'Need Help?',
+      'Contact HR Department\n\n'
+      'If you need assistance with the DHL Leave Management System, please contact your HR department through one of the following channels:\n\n'
+      '• Email: hr@dhl.com\n'
+      '• Phone: +1-800-123-4567\n'
+      '• Office: Visit the HR desk during office hours\n\n'
+      'Operating Hours:\n'
+      'HR Department is available Monday-Friday, 9:00 AM - 5:00 PM.'
+    );
+  }
+  
+  void _showAboutInfo() {
+    _showDocumentDialog(
+      'About',
+      'DHL Leave Management System\n'
+      'Version 1.0.0\n\n'
+      'This application is designed to streamline the leave management process for DHL Express employees worldwide. It allows employees to request time off, check their leave balances, and track approval status.\n\n'
+      'Copyright © 2025 DHL Express. All rights reserved.'
+    );
+  }
+  
   Future<void> _changePassword() async {
     final TextEditingController currentPasswordController = TextEditingController();
     final TextEditingController newPasswordController = TextEditingController();
@@ -201,7 +300,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Change Password'),
+              title: const Text(
+                'Change Password',
+                style: TextStyle(
+                  color: Color(0xFFD40511),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               content: Form(
                 key: formKey,
                 child: Column(
@@ -209,9 +314,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     TextFormField(
                       controller: currentPasswordController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Current Password',
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFD40511)),
                       ),
                       obscureText: true,
                       validator: (value) {
@@ -224,9 +330,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: newPasswordController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'New Password',
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.lock, color: Color(0xFFD40511)),
                       ),
                       obscureText: true,
                       validator: (value) {
@@ -242,9 +349,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: confirmPasswordController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Confirm New Password',
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFD40511)),
                       ),
                       obscureText: true,
                       validator: (value) {
@@ -259,9 +367,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     if (errorMessage != null) ...[
                       const SizedBox(height: 16),
-                      Text(
-                        errorMessage!,
-                        style: const TextStyle(color: Colors.red),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                errorMessage,
+                                style: const TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],
@@ -306,6 +430,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               
                               // Update password
                               await user.updatePassword(newPasswordController.text);
+                              
+                              // Update passwordLastChanged in Firestore
+                              await _firestore.collection('users').doc(_userId).update({
+                                'passwordLastChanged': Timestamp.now(),
+                              });
                               
                               // Close dialog and show success message
                               if (context.mounted) {
@@ -362,6 +491,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
         backgroundColor: const Color(0xFFD40511), // DHL Red
+        foregroundColor: Colors.white,
         actions: [
           // Edit/Save Button
           if (!_isLoading)
@@ -428,6 +558,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+                          if (_createdAt.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Account created: $_createdAt',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -436,6 +576,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // User Information Card
                     Card(
                       elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -453,10 +596,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             // Name Field
                             TextFormField(
                               controller: _nameController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Name',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.person),
+                                border: const OutlineInputBorder(),
+                                prefixIcon: const Icon(Icons.person, color: Color(0xFFD40511)),
                               ),
                               enabled: _isEditing,
                               validator: (value) {
@@ -471,10 +614,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             // Email Field (read-only)
                             TextFormField(
                               initialValue: _email,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Email',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.email),
+                                border: const OutlineInputBorder(),
+                                prefixIcon: const Icon(Icons.email, color: Color(0xFFD40511)),
                               ),
                               enabled: false,
                             ),
@@ -483,12 +626,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             // Department Field
                             TextFormField(
                               controller: _departmentController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Department',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.business),
+                                border: const OutlineInputBorder(),
+                                prefixIcon: const Icon(Icons.business, color: Color(0xFFD40511)),
                               ),
                               enabled: _isEditing && !_isHR, // HR can't edit their department
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your department';
+                                }
+                                return null;
+                              },
                             ),
                             if (_employeeId.isNotEmpty) ...[
                               const SizedBox(height: 16),
@@ -496,10 +645,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               // Employee ID Field (read-only)
                               TextFormField(
                                 initialValue: _employeeId,
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   labelText: 'Employee ID',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.badge),
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.badge, color: Color(0xFFD40511)),
                                 ),
                                 enabled: false,
                               ),
@@ -513,6 +662,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // Account Actions Card
                     Card(
                       elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -529,16 +681,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             
                             // Change Password Button
                             ListTile(
-                              leading: const Icon(Icons.lock, color: Colors.blue),
+                              leading: const Icon(Icons.lock, color: Color(0xFFD40511)),
                               title: const Text('Change Password'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: _changePassword,
                             ),
-                            const Divider(),
+                            const Divider(height: 1),
                             
                             // Logout Button
                             ListTile(
-                              leading: const Icon(Icons.exit_to_app, color: Colors.red),
+                              leading: const Icon(Icons.exit_to_app, color: Color(0xFFD40511)),
                               title: const Text('Logout'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: _logout,
@@ -553,6 +705,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Card(
                       elevation: 1,
                       color: Colors.grey.shade50,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -566,34 +721,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            const ListTile(
-                              leading: Icon(Icons.info_outline, color: Colors.grey),
-                              title: Text('DHL Leave Management System'),
-                              subtitle: Text('Version 1.0.0'),
+                            ListTile(
+                              leading: const Icon(Icons.info_outline, color: Colors.grey),
+                              title: const Text('DHL Leave Management System'),
+                              subtitle: const Text('Version 1.0.0'),
+                              onTap: _showAboutInfo,
                             ),
-                            const Divider(),
-                            const ListTile(
-                              leading: Icon(Icons.support_agent, color: Colors.grey),
-                              title: Text('Need Help?'),
-                              subtitle: Text('Contact HR Department'),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.support_agent, color: Colors.grey),
+                              title: const Text('Need Help?'),
+                              subtitle: const Text('Contact HR Department'),
+                              onTap: _showHelpInfo,
                             ),
-                            const Divider(),
+                            const Divider(height: 1),
                             ListTile(
                               leading: const Icon(Icons.policy, color: Colors.grey),
                               title: const Text('Privacy Policy'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                              onTap: () {
-                                // Open privacy policy
-                              },
+                              onTap: _showPrivacyPolicy,
                             ),
-                            const Divider(),
+                            const Divider(height: 1),
                             ListTile(
                               leading: const Icon(Icons.description, color: Colors.grey),
                               title: const Text('Terms of Service'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                              onTap: () {
-                                // Open terms of service
-                              },
+                              onTap: _showTermsOfService,
                             ),
                           ],
                         ),
@@ -611,6 +764,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),

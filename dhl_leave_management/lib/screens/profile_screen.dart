@@ -13,35 +13,34 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
   bool _isLoading = true;
-  bool _isHR = false;
+  bool _isHR = true;
   String _userType = '';
   String _email = '';
   String _name = '';
   String _department = '';
   String _employeeId = '';
   String _userId = '';
-  
+  String _createdAt = '';
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _departmentController = TextEditingController();
   bool _isEditing = false;
   bool _isSaving = false;
-  
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
   }
-  
+
   @override
   void dispose() {
     _nameController.dispose();
     _departmentController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _loadUserData() async {
     try {
       final user = _auth.currentUser;
@@ -53,10 +52,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
         return;
       }
-      
       _userId = user.uid;
       _email = user.email ?? '';
-      
       // Get user document
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       if (!userDoc.exists) {
@@ -66,29 +63,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
       
-      final userType = userDoc.data()?['userType'] ?? 'EMPLOYEE';
-      final employeeId = userDoc.data()?['employeeId'] ?? '';
-      final name = userDoc.data()?['name'] ?? 'User';
+      final userData = userDoc.data() ?? {};
+      final userType = userData['userType'] ?? 'EMPLOYEE';
+      final employeeId = userData['employeeId'] ?? '';
+      final name = userData['name'] ?? 'User';
+      final createdAt = userData['createdAt'] as Timestamp?;
       
       setState(() {
         _userType = userType;
         _isHR = userType == 'HR_ADMIN';
         _name = name;
         _nameController.text = name;
+        _department = userData['department'] ?? '';
+        _departmentController.text = _department;
+        if (createdAt != null) {
+          _createdAt = createdAt.toDate().toString();
+        }
       });
       
       if (employeeId.isNotEmpty) {
-        // Get employee document for additional details
-        final employeeDoc = await _firestore.collection('employees').doc(employeeId).get();
-        if (employeeDoc.exists) {
-          final department = employeeDoc.data()?['department'] ?? '';
-          
-          setState(() {
-            _employeeId = employeeId;
-            _department = department;
-            _departmentController.text = department;
-          });
-        }
+        setState(() {
+          _employeeId = employeeId;
+        });
       }
       
       setState(() {
@@ -98,7 +94,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _isLoading = false;
       });
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -109,35 +104,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
   }
-  
+
   Future<void> _updateProfile() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    
     setState(() {
       _isSaving = true;
     });
-    
     try {
-      // Update user document
-      await _firestore.collection('users').doc(_userId).update({
+      final updateData = {
         'name': _nameController.text,
         'updatedAt': Timestamp.now(),
-      });
+      };
       
-      // Update employee document if exists
-      if (_employeeId.isNotEmpty) {
-        await _firestore.collection('employees').doc(_employeeId).update({
-          'name': _nameController.text,
-          'department': _departmentController.text,
-          'updatedAt': Timestamp.now(),
-        });
+      // Only update department if user is not HR
+      if (!_isHR) {
+        updateData['department'] = _departmentController.text;
       }
+      
+      // Update user document
+      await _firestore.collection('users').doc(_userId).update(updateData);
       
       setState(() {
         _name = _nameController.text;
-        _department = _departmentController.text;
+        if (!_isHR) {
+          _department = _departmentController.text;
+        }
         _isEditing = false;
         _isSaving = false;
       });
@@ -154,7 +147,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _isSaving = false;
       });
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -165,7 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
   }
-  
+
   Future<void> _logout() async {
     try {
       await _auth.signOut();
@@ -185,12 +177,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
   }
-  
+
+  void _showDocumentDialog(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: SingleChildScrollView(
+            child: Text(content),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFD40511),
+              ),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showPrivacyPolicy() {
+    _showDocumentDialog(
+      'Privacy Policy',
+      'DHL Express Privacy Policy\n\n'
+      'Last updated: May 18, 2025\n\n'
+      'DHL Express ("we," "our," or "us") respects your privacy and is committed to protecting your personal data. This Privacy Policy explains how we collect, use, and share information about you when you use our Employee Leave Management System.\n\n'
+      '1. INFORMATION WE COLLECT\n\n'
+      'We collect information that you provide directly to us, such as your name, email address, employee ID, department, and other information you choose to provide.\n\n'
+      '2. HOW WE USE YOUR INFORMATION\n\n'
+      'We use the information we collect to:\n'
+      '• Provide, maintain, and improve our services\n'
+      '• Process and manage leave requests\n'
+      '• Communicate with you about your account and leave status\n'
+      '• Respond to your comments, questions, and requests\n'
+      '• Comply with applicable laws and regulations\n\n'
+      '3. DATA SECURITY\n\n'
+      'We implement appropriate security measures to protect your personal information from unauthorized access, alteration, disclosure, or destruction. However, no method of transmission over the Internet or electronic storage is 100% secure.\n\n'
+      '4. DATA RETENTION\n\n'
+      'We retain your information for as long as your account is active or as needed to provide you services, comply with legal obligations, resolve disputes, and enforce our agreements.\n\n'
+      '5. YOUR RIGHTS\n\n'
+      'Depending on your location, you may have certain rights regarding your personal information, such as the right to access, update, or delete your information.\n\n'
+      '6. CHANGES TO THIS PRIVACY POLICY\n\n'
+      'We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.\n\n'
+      '7. CONTACT US\n\n'
+      'If you have any questions about this Privacy Policy, please contact your HR department.'
+    );
+  }
+
+  void _showTermsOfService() {
+    _showDocumentDialog(
+      'Terms of Service',
+      'DHL Express Terms of Service\n\n'
+      'Last updated: May 18, 2025\n\n'
+      'Welcome to the DHL Express Employee Leave Management System. By accessing or using our system, you agree to be bound by these Terms of Service.\n\n'
+      '1. ACCEPTANCE OF TERMS\n\n'
+      'By accessing or using the DHL Express Employee Leave Management System, you agree to these Terms of Service and to any additional terms and conditions that may apply.\n\n'
+      '2. USE OF THE SYSTEM\n\n'
+      'You may use the system only for legitimate purposes related to your employment with DHL Express. You agree not to use the system for any illegal or unauthorized purpose.\n\n'
+      '3. ACCOUNT SECURITY\n\n'
+      'You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to notify your HR department immediately of any unauthorized use of your account.\n\n'
+      '4. CONFIDENTIALITY\n\n'
+      'You acknowledge that the system may contain confidential information related to DHL Express and its employees. You agree to maintain the confidentiality of this information and not to disclose it to any third party.\n\n'
+      '5. INTELLECTUAL PROPERTY\n\n'
+      'All content, features, and functionality of the system are the exclusive property of DHL Express and are protected by international copyright, trademark, patent, trade secret, and other intellectual property or proprietary rights laws.\n\n'
+      '6. DISCLAIMER OF WARRANTIES\n\n'
+      'The system is provided "as is" and "as available" without any warranties of any kind, either express or implied.\n\n'
+      '7. LIMITATION OF LIABILITY\n\n'
+      'DHL Express shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the system.\n\n'
+      '8. CHANGES TO THESE TERMS\n\n'
+      'DHL Express reserves the right to modify these Terms of Service at any time. Your continued use of the system after any such changes constitutes your acceptance of the new Terms.\n\n'
+      '9. GOVERNING LAW\n\n'
+      'These Terms shall be governed by and construed in accordance with the laws of the jurisdiction in which your DHL Express office is located.\n\n'
+      '10. CONTACT US\n\n'
+      'If you have any questions about these Terms, please contact your HR department.'
+    );
+  }
+
+  void _showHelpDialog() {
+    _showDocumentDialog(
+      'Need Help?',
+      'Contact HR Department\n\n'
+      'If you need assistance with the DHL Leave Management System, please contact your HR department through one of the following channels:\n\n'
+      '• Email: hr@dhl.com\n'
+      '• Phone: +1-800-123-4567\n'
+      '• Office: Visit the HR desk on the 3rd floor of the main building\n\n'
+      'Common Issues:\n\n'
+      '1. Password Problems\n'
+      'If you\'re having trouble with your password, use the "Forgot Password" option on the login screen or contact HR for a password reset.\n\n'
+      '2. Leave Request Issues\n'
+      'If your leave request is not being processed or you need to make changes to a submitted request, please contact your direct supervisor first, then HR if needed.\n\n'
+      '3. Profile Updates\n'
+      'For changes to your profile that you cannot make yourself, such as department transfers or name changes due to marriage, please submit the appropriate HR form.\n\n'
+      '4. System Errors\n'
+      'If you encounter system errors, please note the error message and the steps that led to the error, then report it to IT support at it.support@dhl.com.\n\n'
+      'Operating Hours:\n'
+      'HR Department is available Monday-Friday, 9:00 AM - 5:00 PM.'
+    );
+  }
+
+  void _showAboutInfo() {
+    _showDocumentDialog(
+      'About DHL Leave Management System',
+      'DHL Leave Management System\n'
+      'Version 1.0.0\n\n'
+      'This application is designed to streamline the leave management process for DHL Express employees worldwide. It allows employees to request time off, check their leave balances, and track approval status. HR administrators can manage leave requests, approve or deny them, and generate reports.\n\n'
+      'Key Features:\n\n'
+      '• Streamlined leave request process\n'
+      '• Real-time leave balance tracking\n'
+      '• Automated approval workflows\n'
+      '• Calendar integration for team visibility\n'
+      '• Reporting and analytics for HR\n\n'
+      'Copyright © 2025 DHL Express. All rights reserved.\n\n'
+      'Developed by DHL Digital Team in collaboration with IT Services.'
+    );
+  }
+
   Future<void> _changePassword() async {
     final TextEditingController currentPasswordController = TextEditingController();
     final TextEditingController newPasswordController = TextEditingController();
     final TextEditingController confirmPasswordController = TextEditingController();
-    
     final formKey = GlobalKey<FormState>();
     bool isChanging = false;
     String? errorMessage;
@@ -201,7 +311,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Change Password'),
+              title: const Text(
+                'Change Password',
+                style: TextStyle(
+                  color: Color(0xFFD40511),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               content: Form(
                 key: formKey,
                 child: Column(
@@ -209,9 +325,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     TextFormField(
                       controller: currentPasswordController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Current Password',
-                        border: OutlineInputBorder(),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFD40511)),
                       ),
                       obscureText: true,
                       validator: (value) {
@@ -224,9 +343,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: newPasswordController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'New Password',
-                        border: OutlineInputBorder(),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        prefixIcon: const Icon(Icons.lock, color: Color(0xFFD40511)),
                       ),
                       obscureText: true,
                       validator: (value) {
@@ -242,9 +364,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: confirmPasswordController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Confirm New Password',
-                        border: OutlineInputBorder(),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFD40511)),
                       ),
                       obscureText: true,
                       validator: (value) {
@@ -259,9 +384,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     if (errorMessage != null) ...[
                       const SizedBox(height: 16),
-                      Text(
-                        errorMessage!,
-                        style: const TextStyle(color: Colors.red),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                errorMessage!, // Fixed: Added ! to tell Dart this is non-null here
+                                style: const TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],
@@ -272,6 +413,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF666666),
+                  ),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -283,7 +427,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               isChanging = true;
                               errorMessage = null;
                             });
-                            
                             try {
                               // Get current user
                               final user = _auth.currentUser;
@@ -294,18 +437,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 });
                                 return;
                               }
-                              
                               // Create credential with current password
                               final credential = EmailAuthProvider.credential(
                                 email: _email,
                                 password: currentPasswordController.text,
                               );
-                              
                               // Re-authenticate user
                               await user.reauthenticateWithCredential(credential);
-                              
                               // Update password
                               await user.updatePassword(newPasswordController.text);
+                              
+                              // Update passwordLastChanged in Firestore
+                              await _firestore.collection('users').doc(_userId).update({
+                                'passwordLastChanged': Timestamp.now(),
+                              });
                               
                               // Close dialog and show success message
                               if (context.mounted) {
@@ -336,6 +481,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFD40511), // DHL Red
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                   child: isChanging
                       ? const SizedBox(
@@ -362,6 +510,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
         backgroundColor: const Color(0xFFD40511), // DHL Red
+        foregroundColor: Colors.white,
         actions: [
           // Edit/Save Button
           if (!_isLoading)
@@ -428,14 +577,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+                          if (_createdAt.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Account created: $_createdAt',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                     const SizedBox(height: 32),
-                    
                     // User Information Card
                     Card(
                       elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -449,14 +610,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            
                             // Name Field
                             TextFormField(
                               controller: _nameController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Name',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.person),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                prefixIcon: const Icon(Icons.person, color: Color(0xFFD40511)),
                               ),
                               enabled: _isEditing,
                               validator: (value) {
@@ -467,39 +629,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               },
                             ),
                             const SizedBox(height: 16),
-                            
                             // Email Field (read-only)
                             TextFormField(
                               initialValue: _email,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Email',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.email),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                prefixIcon: const Icon(Icons.email, color: Color(0xFFD40511)),
                               ),
                               enabled: false,
                             ),
                             const SizedBox(height: 16),
-                            
                             // Department Field
                             TextFormField(
                               controller: _departmentController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: 'Department',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.business),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                prefixIcon: const Icon(Icons.business, color: Color(0xFFD40511)),
                               ),
                               enabled: _isEditing && !_isHR, // HR can't edit their department
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your department';
+                                }
+                                return null;
+                              },
                             ),
                             if (_employeeId.isNotEmpty) ...[
                               const SizedBox(height: 16),
-                              
                               // Employee ID Field (read-only)
                               TextFormField(
                                 initialValue: _employeeId,
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   labelText: 'Employee ID',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.badge),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  prefixIcon: const Icon(Icons.badge, color: Color(0xFFD40511)),
                                 ),
                                 enabled: false,
                               ),
@@ -509,10 +680,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
                     // Account Actions Card
                     Card(
                       elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -526,19 +699,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            
                             // Change Password Button
                             ListTile(
-                              leading: const Icon(Icons.lock, color: Colors.blue),
+                              leading: const Icon(Icons.lock, color: Color(0xFFD40511)),
                               title: const Text('Change Password'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: _changePassword,
                             ),
-                            const Divider(),
-                            
+                            const Divider(height: 1),
                             // Logout Button
                             ListTile(
-                              leading: const Icon(Icons.exit_to_app, color: Colors.red),
+                              leading: const Icon(Icons.exit_to_app, color: Color(0xFFD40511)),
                               title: const Text('Logout'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: _logout,
@@ -548,11 +719,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    
                     // App Information Card
                     Card(
                       elevation: 1,
                       color: Colors.grey.shade50,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -566,41 +739,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            const ListTile(
-                              leading: Icon(Icons.info_outline, color: Colors.grey),
-                              title: Text('DHL Leave Management System'),
-                              subtitle: Text('Version 1.0.0'),
+                            ListTile(
+                              leading: const Icon(Icons.info_outline, color: Colors.grey),
+                              title: const Text('DHL Leave Management System'),
+                              subtitle: const Text('Version 1.0.0'),
+                              onTap: _showAboutInfo,
                             ),
-                            const Divider(),
-                            const ListTile(
-                              leading: Icon(Icons.support_agent, color: Colors.grey),
-                              title: Text('Need Help?'),
-                              subtitle: Text('Contact HR Department'),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.support_agent, color: Colors.grey),
+                              title: const Text('Need Help?'),
+                              subtitle: const Text('Contact HR Department'),
+                              onTap: _showHelpDialog,
                             ),
-                            const Divider(),
+                            const Divider(height: 1),
                             ListTile(
                               leading: const Icon(Icons.policy, color: Colors.grey),
                               title: const Text('Privacy Policy'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                              onTap: () {
-                                // Open privacy policy
-                              },
+                              onTap: _showPrivacyPolicy,
                             ),
-                            const Divider(),
+                            const Divider(height: 1),
                             ListTile(
                               leading: const Icon(Icons.description, color: Colors.grey),
                               title: const Text('Terms of Service'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                              onTap: () {
-                                // Open terms of service
-                              },
+                              onTap: _showTermsOfService,
                             ),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 32),
-                    
                     // Copyright
                     const Center(
                       child: Text(
@@ -611,6 +781,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),

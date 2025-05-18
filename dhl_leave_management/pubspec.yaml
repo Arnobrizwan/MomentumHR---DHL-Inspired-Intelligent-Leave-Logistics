@@ -34,6 +34,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
   assets:
-    # - assets/images/
+    - assets/DHL_Express_logo_rgb.png
     - assets/Employee_Leave_Data_v1.xlsx
