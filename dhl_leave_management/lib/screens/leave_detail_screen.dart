@@ -453,86 +453,159 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Status Card
+                          // Enhanced Status Card
                           Card(
                             elevation: 3,
-                            color: _getStatusColor(_leaveData!['status']).withOpacity(0.1),
+                            margin: const EdgeInsets.only(bottom: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(
-                                color: _getStatusColor(_leaveData!['status']),
-                                width: 1,
-                              ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _getStatusIcon(_leaveData!['status']),
-                                    color: _getStatusColor(_leaveData!['status']),
-                                    size: 40,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    _getStatusColor(_leaveData!['status']).withOpacity(0.8),
+                                    _getStatusColor(_leaveData!['status']).withOpacity(0.2),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
                                       children: [
-                                        Text(
-                                          _leaveData!['status'],
-                                          style: TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withOpacity(0.9),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            _getStatusIcon(_leaveData!['status']),
                                             color: _getStatusColor(_leaveData!['status']),
+                                            size: 32,
                                           ),
                                         ),
-                                        if (_leaveData!['status'] == 'Rejected' && _leaveData!['rejectReason'] != null) ...[
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'Reason: ${_leaveData!['rejectReason']}',
-                                            style: const TextStyle(
-                                              fontStyle: FontStyle.italic,
+                                        const SizedBox(width: 16),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              _leaveData!['status'],
+                                              style: const TextStyle(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                            if (_leaveData!['status'] == 'Rejected' && _leaveData!['rejectReason'] != null) ...[
+                                              const SizedBox(height: 4),
+                                              Container(
+                                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
+                                                child: Text(
+                                                  '${_leaveData!['rejectReason']}',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
                                       ],
                                     ),
-                                  ),
-                                ],
+                                    if (_leaveData!['status'] == 'Pending')
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.timer,
+                                              size: 14,
+                                              color: _getStatusColor(_leaveData!['status']),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Awaiting Approval',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: _getStatusColor(_leaveData!['status']),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 24),
                           
-                          // Employee Information
+                          // Enhanced Employee Information Card
                           Card(
                             elevation: 2,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                             child: Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(20),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Employee Information',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFD40511).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                          Icons.person,
+                                          color: Color(0xFFD40511),
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        'Employee Information',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF333333),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 20),
                                   _buildInfoRow(
                                     icon: Icons.person,
                                     label: 'Name',
                                     value: _leaveData!['employeeName'] ?? 'Unknown',
                                   ),
-                                  const SizedBox(height: 8),
+                                  const Divider(height: 24),
                                   _buildInfoRow(
                                     icon: Icons.badge,
                                     label: 'Employee ID',
                                     value: _leaveData!['employeeId'] ?? 'Unknown',
                                   ),
                                   if (_employeeEmail != null) ...[
-                                    const SizedBox(height: 8),
+                                    const Divider(height: 24),
                                     _buildInfoRow(
                                       icon: Icons.email,
                                       label: 'Email',
@@ -543,36 +616,57 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
                           
-                          // Leave Details
+                          // Enhanced Leave Details Card
                           Card(
                             elevation: 2,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                             child: Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(20),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Leave Details',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFD40511).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                          Icons.calendar_today,
+                                          color: Color(0xFFD40511),
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        'Leave Details',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF333333),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 20),
                                   _buildInfoRow(
                                     icon: Icons.category,
                                     label: 'Leave Type',
                                     value: _leaveData!['leaveType'] ?? 'Unknown',
                                   ),
-                                  const SizedBox(height: 8),
+                                  const Divider(height: 24),
                                   _buildInfoRow(
                                     icon: Icons.calendar_today,
                                     label: 'Duration',
                                     value: '${_calculateLeaveDuration()} working day(s)',
                                   ),
-                                  const SizedBox(height: 8),
+                                  const Divider(height: 24),
                                   _buildInfoRow(
                                     icon: Icons.date_range,
                                     label: 'Start Date',
@@ -582,7 +676,7 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                                         )
                                       : 'Unknown',
                                   ),
-                                  const SizedBox(height: 8),
+                                  const Divider(height: 24),
                                   _buildInfoRow(
                                     icon: Icons.date_range,
                                     label: 'End Date',
@@ -592,60 +686,203 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                                         )
                                       : 'Unknown',
                                   ),
-                                  if (_leaveData!['reason'] != null) ...[
-                                    const SizedBox(height: 16),
+                                  if (_leaveData!['reason'] != null && _leaveData!['reason'].toString().isNotEmpty) ...[
+                                    const Divider(height: 24),
                                     const Text(
                                       'Reason for Leave',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
+                                        color: Color(0xFF666666),
+                                        fontSize: 14,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
                                     Container(
-                                      padding: const EdgeInsets.all(12),
+                                      padding: const EdgeInsets.all(16),
                                       decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
-                                        borderRadius: BorderRadius.circular(8),
+                                        color: Colors.grey.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.grey.shade200),
                                       ),
-                                      child: Text(_leaveData!['reason']),
+                                      child: Text(
+                                        _leaveData!['reason'],
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          height: 1.4,
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
                           
-                          // Application Timeline
+                          // Enhanced Application Timeline
                           Card(
                             elevation: 2,
+                            margin: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                             child: Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(20),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Application Timeline',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFD40511).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                          Icons.history,
+                                          color: Color(0xFFD40511),
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        'Application Timeline',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF333333),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 16),
-                                  _buildTimelineItem(
-                                    title: 'Application Submitted',
-                                    date: _leaveData!['createdAt'] != null 
-                                      ? (_leaveData!['createdAt'] as Timestamp).toDate()
-                                      : null,
-                                    isCompleted: true,
-                                  ),
-                                  _buildTimelineItem(
-                                    title: 'Status: ${_leaveData!['status']}',
-                                    date: _leaveData!['updatedAt'] != null
-                                        ? (_leaveData!['updatedAt'] as Timestamp).toDate()
-                                        : null,
-                                    isCompleted: _leaveData!['status'] != 'Pending',
-                                    isLast: true,
+                                  const SizedBox(height: 24),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Column(
+                                        children: [
+                                          Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: Colors.green,
+                                              border: Border.all(color: Colors.white, width: 3),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.grey.withOpacity(0.3),
+                                                  spreadRadius: 1,
+                                                  blurRadius: 3,
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Icon(
+                                              Icons.check,
+                                              color: Colors.white,
+                                              size: 24,
+                                            ),
+                                          ),
+                                          Container(
+                                            width: 3,
+                                            height: 50,
+                                            color: _leaveData!['status'] != 'Pending' 
+                                                ? Colors.green 
+                                                : Colors.grey.shade300,
+                                          ),
+                                          Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: _leaveData!['status'] != 'Pending' 
+                                                  ? _getStatusColor(_leaveData!['status']) 
+                                                  : Colors.grey.shade300,
+                                              border: Border.all(
+                                                color: Colors.white, 
+                                                width: 3
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.grey.withOpacity(0.3),
+                                                  spreadRadius: 1,
+                                                  blurRadius: 3,
+                                                ),
+                                              ],
+                                            ),
+                                            child: Icon(
+                                              _leaveData!['status'] == 'Approved' 
+                                                  ? Icons.check_circle 
+                                                  : _leaveData!['status'] == 'Rejected' 
+                                                      ? Icons.cancel 
+                                                      : Icons.hourglass_empty,
+                                              color: Colors.white,
+                                              size: 24,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 20),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'Application Submitted',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  _leaveData!['createdAt'] != null 
+                                                    ? DateFormat('MMM d, yyyy - h:mm a').format(
+                                                        (_leaveData!['createdAt'] as Timestamp).toDate(),
+                                                      )
+                                                    : 'Unknown date',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 36),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  _leaveData!['status'] == 'Pending' 
+                                                      ? 'Waiting for Review' 
+                                                      : 'Application ${_leaveData!['status']}',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: _leaveData!['status'] != 'Pending' 
+                                                        ? _getStatusColor(_leaveData!['status']) 
+                                                        : Colors.grey[700],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                if (_leaveData!['updatedAt'] != null && _leaveData!['status'] != 'Pending')
+                                                  Text(
+                                                    DateFormat('MMM d, yyyy - h:mm a').format(
+                                                      (_leaveData!['updatedAt'] as Timestamp).toDate(),
+                                                    ),
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -654,12 +891,15 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                           
                           // HR Actions
                           if (_isHR && _leaveData!['status'] == 'Pending') ...[
-                            const SizedBox(height: 32),
-                            const Text(
+                            const SizedBox(height: 24),
+                            const Divider(),
+                            const SizedBox(height: 24),
+                            Text(
                               'HR Actions',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -675,7 +915,11 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.red,
                                       foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      elevation: 0,
                                     ),
                                   ),
                                 ),
@@ -690,7 +934,11 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.green,
                                       foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      elevation: 0,
                                     ),
                                   ),
                                 ),
@@ -700,7 +948,9 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                           
                           // Employee Actions
                           if (!_isHR && _leaveData!['status'] == 'Pending') ...[
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 24),
+                            const Divider(),
+                            const SizedBox(height: 24),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
@@ -710,17 +960,25 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  elevation: 0,
                                 ),
                               ),
                             ),
                           ],
+                          
+                          // Spacing at the bottom
+                          const SizedBox(height: 32),
                         ],
                       ),
                     ),
     );
   }
   
+  // Enhanced info row builder
   Widget _buildInfoRow({
     required IconData icon,
     required String label,
@@ -729,70 +987,13 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: Colors.grey, size: 20),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                ),
-              ),
-            ],
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(8),
           ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildTimelineItem({
-    required String title,
-    required DateTime? date,
-    required bool isCompleted,
-    bool isLast = false,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isCompleted ? Colors.green : Colors.grey.shade300,
-                border: Border.all(
-                  color: isCompleted ? Colors.green.shade700 : Colors.grey,
-                  width: 2,
-                ),
-              ),
-              child: isCompleted 
-                  ? const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 16,
-                    )
-                  : null,
-            ),
-            if (!isLast)
-              Container(
-                width: 2,
-                height: 40,
-                color: isCompleted ? Colors.green : Colors.grey.shade300,
-              ),
-          ],
+          child: Icon(icon, color: const Color(0xFFD40511), size: 18),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -800,23 +1001,20 @@ class _LeaveDetailScreenState extends State<LeaveDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
+                label,
                 style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isCompleted ? Colors.black : Colors.grey,
+                  color: Colors.grey[600],
+                  fontSize: 13,
                 ),
               ),
-              if (date != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  DateFormat('MMM d, yyyy - h:mm a').format(date),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isCompleted ? Colors.grey : Colors.grey.shade400,
-                  ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
-              const SizedBox(height: 16),
+              ),
             ],
           ),
         ),

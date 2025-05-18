@@ -1930,123 +1930,294 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
   
   // Show Employee Leave History
-  void _showEmployeeLeaveHistory(String employeeId, String employeeName) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          appBar: AppBar(
-            title: Text('$employeeName - Leave History'),
-            backgroundColor: const Color(0xFFD40511),
-          ),
-          body: StreamBuilder<List<LeaveApplication>>(
-            stream: _firebaseService.getEmployeeLeaveApplications(employeeId),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('No leave applications found for this employee'),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => LeaveApplicationForm(
-                                employeeId: employeeId,
-                                employeeName: employeeName,
-                              ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('Create Leave Application'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD40511),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              
-              final applications = snapshot.data!;
-              
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: applications.length,
-                itemBuilder: (context, index) {
-                  final leave = applications[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+void _showEmployeeLeaveHistory(String employeeId, String employeeName) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => Scaffold(
+        appBar: AppBar(
+          title: Text('$employeeName - Leave History'),
+          backgroundColor: const Color(0xFFD40511),
+        ),
+        body: StreamBuilder<List<LeaveApplication>>(
+          stream: _firebaseService.getEmployeeLeaveApplications(employeeId),
+          builder: (context, snapshot) {
+            // Error handling with retry option
+            if (snapshot.hasError) {
+              print("StreamBuilder error: ${snapshot.error}");
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error loading leave history',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      title: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            leave.leaveType,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          _getStatusChip(leave.status),
-                        ],
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          Text(
-                            '${DateFormat('MMM d, yyyy').format(leave.startDate)} to ${DateFormat('MMM d, yyyy').format(leave.endDate)}',
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          if (leave.reason != null && leave.reason!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text('Reason: ${leave.reason}'),
-                            ),
-                        ],
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.arrow_forward_ios, size: 16),
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => LeaveDetailScreen(leaveId: leave.id),
-                            ),
-                          );
-                        },
+                    const SizedBox(height: 8),
+                    Text('${snapshot.error}', style: TextStyle(color: Colors.grey[600])),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _showEmployeeLeaveHistory(employeeId, employeeName);
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD40511),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
                     ),
-                  );
-                },
-              );
-            },
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => LeaveApplicationForm(
-                    employeeId: employeeId,
-                    employeeName: employeeName,
-                  ),
+                  ],
                 ),
               );
-            },
-            backgroundColor: const Color(0xFFD40511),
-            child: const Icon(Icons.add),
-          ),
+            }
+            
+            // Loading state
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: Color(0xFFD40511)),
+                    SizedBox(height: 24),
+                    Text("Loading leave history...", 
+                      style: TextStyle(color: Colors.grey)
+                    ),
+                  ],
+                ),
+              );
+            }
+            
+            // Empty state with better visuals
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.event_busy, size: 80, color: Colors.grey[400]),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'No leave applications found',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'This employee has no leave history yet',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => LeaveApplicationForm(
+                              employeeId: employeeId,
+                              employeeName: employeeName,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create Leave Application'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD40511),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+            
+            // Group applications by year for better organization
+            final applications = snapshot.data!;
+            final applicationsByYear = <int, List<LeaveApplication>>{};
+            
+            // Group applications by year
+            for (final application in applications) {
+              final year = application.startDate.year;
+              if (!applicationsByYear.containsKey(year)) {
+                applicationsByYear[year] = [];
+              }
+              applicationsByYear[year]!.add(application);
+            }
+            
+            // Sort years in descending order (newest first)
+            final years = applicationsByYear.keys.toList()..sort((a, b) => b.compareTo(a));
+            
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: years.length,
+              itemBuilder: (context, yearIndex) {
+                final year = years[yearIndex];
+                final yearApplications = applicationsByYear[year]!;
+                
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Year header
+                    Container(
+                      margin: const EdgeInsets.only(top: 8, bottom: 16, left: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD40511).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        '$year',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFD40511),
+                        ),
+                      ),
+                    ),
+                    // Leave applications for this year
+                    ...yearApplications.map((leave) {
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        elevation: 1,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => LeaveDetailScreen(leaveId: leave.id),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          leave.leaveType.toLowerCase().contains('annual') 
+                                              ? Icons.beach_access
+                                              : leave.leaveType.toLowerCase().contains('medical')
+                                                  ? Icons.medical_services
+                                                  : Icons.event,
+                                          color: const Color(0xFFD40511),
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          leave.leaveType,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    _getStatusChip(leave.status),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Icon(Icons.date_range, size: 16, color: Colors.grey[600]),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '${DateFormat('MMM d').format(leave.startDate)} to ${DateFormat('MMM d').format(leave.endDate)}',
+                                      style: const TextStyle(fontWeight: FontWeight.w500),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '(${leave.calculateDuration()} days)',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (leave.reason != null && leave.reason!.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Reason: ${leave.reason}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.grey[700],
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'View Details',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.blue[700],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 12,
+                                      color: Colors.blue[700],
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => LeaveApplicationForm(
+                  employeeId: employeeId,
+                  employeeName: employeeName,
+                ),
+              ),
+            );
+          },
+          backgroundColor: const Color(0xFFD40511),
+          child: const Icon(Icons.add),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
   
   // Show Edit Employee Dialog
   void _showEditEmployeeDialog(String employeeId, String employeeName) {
