@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +14,7 @@ import 'package:dhl_leave_management/screens/chatbot_screen.dart';
 import 'package:dhl_leave_management/screens/first_time_password_change_screen.dart';
 import 'package:dhl_leave_management/screens/hr_notification_settings_screen.dart';
 import 'package:dhl_leave_management/screens/leave_application_form.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -33,34 +35,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // For filtering employees
   final TextEditingController _employeeSearchController = TextEditingController();
   String _employeeSearchQuery = '';
+
+  /// Keep the search field focused across rebuilds
+  final FocusNode _employeeSearchFocus = FocusNode();
+  final FocusNode _leaveSearchFocus = FocusNode();
+
+  /// Debounce timer so we don't rebuild on every keystroke
+  Timer? _searchDebounce;
+  Timer? _leaveSearchDebounce;
   
   // For filtering leave applications
   String _leaveStatusFilter = 'All';
   final TextEditingController _leaveSearchController = TextEditingController();
   String _leaveSearchQuery = '';
+
+  DateTimeRange? _selectedDateRange;
   
   @override
   void initState() {
     super.initState();
     _loadUserData();
     
-    _employeeSearchController.addListener(() {
-      setState(() {
-        _employeeSearchQuery = _employeeSearchController.text.toLowerCase();
-      });
-    });
-    
-    _leaveSearchController.addListener(() {
-      setState(() {
-        _leaveSearchQuery = _leaveSearchController.text.toLowerCase();
-      });
-    });
+    _employeeSearchController.addListener(_onSearchChanged);
+    _leaveSearchController.addListener(_onLeaveSearchChanged);
   }
   
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _leaveSearchDebounce?.cancel();
     _employeeSearchController.dispose();
+    _employeeSearchFocus.dispose();
     _leaveSearchController.dispose();
+    _leaveSearchFocus.dispose();
     super.dispose();
   }
   
@@ -91,6 +98,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       }
     }
+  }
+  
+  void _onSearchChanged() {
+    // cancel any pending timer
+    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
+
+    // wait 300 ms after the last keystroke to rebuild
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _employeeSearchQuery = _employeeSearchController.text.toLowerCase();
+      });
+     // _employeeSearchFocus.requestFocus();
+    });
+  }
+  
+  void _onLeaveSearchChanged() {
+    if (_leaveSearchDebounce?.isActive ?? false) _leaveSearchDebounce!.cancel();
+    _leaveSearchDebounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _leaveSearchQuery = _leaveSearchController.text.toLowerCase();
+      });
+      //_leaveSearchFocus.requestFocus();
+    });
   }
   
   Future<void> _logout() async {
@@ -313,7 +343,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Color(0xFFD40511), // DHL Red
                 ),
               )
-            : _buildBody(),
+            : IndexedStack(
+                index: _selectedIndex,
+                children: [
+                  _buildDashboard(),
+                  _buildEmployeesList(),
+                  _buildLeaveApplicationsList(),
+                  _buildSettings(),
+                ],
+              ),
       ),
       // Add FAB for quick actions depending on selected index
       floatingActionButton: _selectedIndex == 1 || _selectedIndex == 2
@@ -335,21 +373,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             )
           : null,
     );
-  }
-  
-  Widget _buildBody() {
-    switch (_selectedIndex) {
-      case 0:
-        return _buildDashboard();
-      case 1:
-        return _buildEmployeesList();
-      case 2:
-        return _buildLeaveApplicationsList();
-      case 3:
-        return _buildSettings();
-      default:
-        return _buildDashboard();
-    }
   }
   
   Widget _buildDashboard() {
@@ -775,18 +798,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
+  
   // UPDATED EMPLOYEE LIST IMPLEMENTATION
   Widget _buildEmployeesList() {
     return Container(
       color: Colors.grey[100],
-      child: StreamBuilder(
+      child: StreamBuilder<QuerySnapshot>(
         stream: _firebaseService.getAllEmployees(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(
               child: Column(
@@ -808,43 +830,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
             );
           }
           
-          // Apply search filter if there's a query
+          // filter
           var employees = snapshot.data!.docs;
           if (_employeeSearchQuery.isNotEmpty) {
             employees = employees.where((doc) {
-              final data = doc.data() as Map<String, dynamic>;
+              final data = doc.data()! as Map<String, dynamic>;
               final name = (data['name'] as String? ?? '').toLowerCase();
               final id = (data['id'] as String? ?? '').toLowerCase();
-              final department = (data['department'] as String? ?? '').toLowerCase();
-              
-              return name.contains(_employeeSearchQuery) || 
-                     id.contains(_employeeSearchQuery) ||
-                     department.contains(_employeeSearchQuery);
+              final dept = (data['department'] as String? ?? '').toLowerCase();
+              return name.contains(_employeeSearchQuery) ||
+                    id.contains(_employeeSearchQuery) ||
+                    dept.contains(_employeeSearchQuery);
             }).toList();
           }
           
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // header
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.people,
-                      color: Color(0xFFD40511),
-                      size: 28,
-                    ),
+                    const Icon(Icons.people, color: Color(0xFFD40511), size: 28),
                     const SizedBox(width: 12),
-                    const Text(
-                      'Employees',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF333333),
-                      ),
-                    ),
+                    const Text('Employees',
+                        style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF333333))),
                     const Spacer(),
                     ElevatedButton.icon(
                       onPressed: _showAddEmployeeDialog,
@@ -854,57 +868,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         backgroundColor: const Color(0xFFD40511),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
                     ),
                   ],
                 ),
               ),
               
-              // Search box
+              // SEARCH FIELD with focusNode
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: TextField(
+                  focusNode: _employeeSearchFocus,
                   controller: _employeeSearchController,
                   decoration: InputDecoration(
                     hintText: 'Search employees...',
                     prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                    suffixIcon: _employeeSearchQuery.isNotEmpty 
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _employeeSearchController.clear();
-                          },
-                        )
-                      : null,
+                    suffixIcon: _employeeSearchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _employeeSearchController.clear();
+                              setState(() => _employeeSearchQuery = '');
+                              _employeeSearchFocus.requestFocus();
+                            },
+                          )
+                        : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide.none,
                     ),
                     filled: true,
                     fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   ),
                 ),
               ),
               
-              // Employee count
+              // count
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                child: Text(
-                  'Showing ${employees.length} employees',
-                  style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                ),
+                child: Text('Showing ${employees.length} employees',
+                    style: TextStyle(color: Colors.grey[700], fontSize: 12)),
               ),
               
-              // Employee list
+              // list
               Expanded(
                 child: employees.isEmpty
                     ? Center(
-                        child: Text(
-                          'No employees match your search',
-                          style: TextStyle(color: Colors.grey[700]),
-                        ),
+                        child: Text('No employees match your search',
+                            style: TextStyle(color: Colors.grey[700])),
                       )
                     : ListView.builder(
                         key: const PageStorageKey<String>('employeeListView'),
@@ -912,106 +927,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         itemCount: employees.length,
                         itemBuilder: (context, index) {
                           final doc = employees[index];
-                          final employee = doc.data() as Map<String, dynamic>;
-                          final employeeId = employee['id'] as String? ?? '';
-                          final employeeName = employee['name'] as String? ?? 'Unknown';
-                          final department = employee['department'] as String? ?? 'Department not assigned';
-                          
-                      return Card(
-                            key: ValueKey<String>(employeeId),
+                          final data = doc.data()! as Map<String, dynamic>;
+                          final id = data['id'] as String? ?? '';
+                          final name = data['name'] as String? ?? 'Unknown';
+                          final dept =
+                              data['department'] as String? ?? 'Department not assigned';
+                          return Card(
+                            key: ValueKey(id),
                             margin: const EdgeInsets.only(bottom: 16),
                             elevation: 1,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                                borderRadius: BorderRadius.circular(12)),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Employee info
                                 ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
                                   leading: CircleAvatar(
                                     backgroundColor: const Color(0xFFD40511),
-                                    child: Text(
-                                      employeeName.isNotEmpty ? employeeName.substring(0, 1).toUpperCase() : '?',
-                                      style: const TextStyle(color: Colors.white),
-                                    ),
+                                    child: Text(name.isNotEmpty
+                                        ? name[0].toUpperCase()
+                                        : '?'),
                                   ),
-                                  title: Text(
-                                    employeeName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 16,
-                                    ),
-                                  ),
+                                  title: Text(name,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 16)),
                                   subtitle: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       const SizedBox(height: 4),
-                                      Text(
-                                        'ID: $employeeId',
-                                        style: TextStyle(
-                                          color: Colors.grey[700],
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                      Text(
-                                        department,
-                                        style: TextStyle(
-                                          color: Colors.grey[700],
-                                          fontSize: 13,
-                                        ),
-                                      ),
+                                      Text('ID: $id',
+                                          style: TextStyle(
+                                              color: Colors.grey[700], fontSize: 13)),
+                                      Text(dept,
+                                          style: TextStyle(
+                                              color: Colors.grey[700], fontSize: 13)),
                                     ],
                                   ),
                                   trailing: IconButton(
-                                    icon: Icon(
-                                      Icons.more_vert,
-                                      color: Colors.grey[600],
-                                    ),
-                                    onPressed: () {
-                                      _showEmployeeActions(employeeId, employeeName);
-                                    },
+                                    icon: Icon(Icons.more_vert,
+                                        color: Colors.grey[600]),
+                                    onPressed: () =>
+                                        _showEmployeeActions(id, name),
                                   ),
                                 ),
-                                
-                                // Quick action buttons
+                                // quick-actions
                                 Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 0, 16, 16),
                                   child: Row(
                                     children: [
                                       Expanded(
                                         child: OutlinedButton.icon(
-                                          onPressed: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) => LeaveApplicationForm(
-                                                  employeeId: employeeId,
-                                                  employeeName: employeeName,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          icon: const Icon(Icons.add_circle_outline, size: 18),
+                                          onPressed: () => Navigator.of(context)
+                                              .push(MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      LeaveApplicationForm(
+                                                          employeeId: id,
+                                                          employeeName: name))),
+                                          icon: const Icon(
+                                              Icons.add_circle_outline,
+                                              size: 18),
                                           label: const Text('Apply Leave'),
                                           style: OutlinedButton.styleFrom(
-                                            foregroundColor: const Color(0xFFD40511),
-                                            side: const BorderSide(color: Color(0xFFD40511)),
-                                          ),
+                                              foregroundColor:
+                                                  const Color(0xFFD40511),
+                                              side: const BorderSide(
+                                                  color:
+                                                      Color(0xFFD40511))),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: OutlinedButton.icon(
-                                          onPressed: () {
-                                            _showEmployeeLeaveHistory(employeeId, employeeName);
-                                          },
-                                          icon: const Icon(Icons.history, size: 18),
+                                          onPressed: () =>
+                                              _showEmployeeLeaveHistory(
+                                                  id, name),
+                                          icon:
+                                              const Icon(Icons.history, size: 18),
                                           label: const Text('Leave History'),
                                           style: OutlinedButton.styleFrom(
-                                            foregroundColor: Colors.blue,
-                                            side: const BorderSide(color: Colors.blue),
-                                          ),
+                                              foregroundColor: Colors.blue,
+                                              side: const BorderSide(
+                                                  color: Colors.blue)),
                                         ),
                                       ),
                                     ],
@@ -1069,6 +1069,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           
           // Apply filters
           var applications = snapshot.data!;
+          
+          // Date range filter
+          if (_selectedDateRange != null) {
+            applications = applications.where((app) {
+              // include any applications whose start or end date falls in the range
+              return (app.startDate.isAfter(_selectedDateRange!.start.subtract(const Duration(days:1))) &&
+                     app.startDate.isBefore(_selectedDateRange!.end.add(const Duration(days:1))))
+                  || (app.endDate.isAfter(_selectedDateRange!.start.subtract(const Duration(days:1))) &&
+                     app.endDate.isBefore(_selectedDateRange!.end.add(const Duration(days:1))));
+            }).toList();
+          }
           
           // Filter by status
           if (_leaveStatusFilter != 'All') {
@@ -1147,6 +1158,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Expanded(
                       child: TextField(
+                        focusNode: _leaveSearchFocus,
                         controller: _leaveSearchController,
                         decoration: InputDecoration(
                           hintText: 'Search applications...',
@@ -1156,6 +1168,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 icon: const Icon(Icons.clear),
                                 onPressed: () {
                                   _leaveSearchController.clear();
+                                  setState(() => _leaveSearchQuery = '');
+                                  _leaveSearchFocus.requestFocus();
                                 },
                               )
                             : null,
@@ -1170,19 +1184,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: IconButton(
-                        onPressed: () {
-                          // Date filter
-                        },
-                        icon: const Icon(Icons.date_range, color: Color(0xFFD40511)),
-                        tooltip: 'Filter by Date',
-                      ),
-                    ),
+                   
+Container(
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(8),
+  ),
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      // Simple icon button that shows the date picker
+      IconButton(
+        onPressed: () async {
+          final picked = await showDateRangePicker(
+            context: context,
+            firstDate: DateTime(2020),
+            lastDate: DateTime.now().add(const Duration(days: 365)),
+            initialDateRange: _selectedDateRange,
+            builder: (context, child) {
+              return Theme(
+                data: ThemeData.light().copyWith(
+                  colorScheme: const ColorScheme.light(
+                    primary: Color(0xFFD40511),
+                    onPrimary: Colors.white,
+                  ),
+                ),
+                child: child!,
+              );
+            },
+          );
+          
+          if (picked != null) {
+            setState(() {
+              _selectedDateRange = picked;
+            });
+          }
+        },
+        icon: const Icon(Icons.date_range, color: Color(0xFFD40511)),
+        tooltip: 'Filter by Date',
+      ),
+      
+      // Show the selected date range if available
+      if (_selectedDateRange != null)
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: Text(
+            '${DateFormat("MM/dd").format(_selectedDateRange!.start)} - ${DateFormat("MM/dd").format(_selectedDateRange!.end)}',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ),
+        
+      // Only show clear button when a date range is selected
+      if (_selectedDateRange != null)
+        IconButton(
+          icon: const Icon(Icons.clear, size: 18),
+          onPressed: () {
+            setState(() {
+              _selectedDateRange = null;
+            });
+          },
+          tooltip: 'Clear date filter',
+        ),
+    ],
+  ),
+),
                   ],
                 ),
               ),
@@ -1930,294 +1995,294 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
   
   // Show Employee Leave History
-void _showEmployeeLeaveHistory(String employeeId, String employeeName) {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (context) => Scaffold(
-        appBar: AppBar(
-          title: Text('$employeeName - Leave History'),
-          backgroundColor: const Color(0xFFD40511),
-        ),
-        body: StreamBuilder<List<LeaveApplication>>(
-          stream: _firebaseService.getEmployeeLeaveApplications(employeeId),
-          builder: (context, snapshot) {
-            // Error handling with retry option
-            if (snapshot.hasError) {
-              print("StreamBuilder error: ${snapshot.error}");
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Error loading leave history',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('${snapshot.error}', style: TextStyle(color: Colors.grey[600])),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _showEmployeeLeaveHistory(employeeId, employeeName);
-                      },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD40511),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+  void _showEmployeeLeaveHistory(String employeeId, String employeeName) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: Text('$employeeName - Leave History'),
+            backgroundColor: const Color(0xFFD40511),
+          ),
+          body: StreamBuilder<List<LeaveApplication>>(
+            stream: _firebaseService.getEmployeeLeaveApplications(employeeId),
+            builder: (context, snapshot) {
+              // Error handling with retry option
+              if (snapshot.hasError) {
+                print("StreamBuilder error: ${snapshot.error}");
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Error loading leave history',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            }
-            
-            // Loading state
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(color: Color(0xFFD40511)),
-                    SizedBox(height: 24),
-                    Text("Loading leave history...", 
-                      style: TextStyle(color: Colors.grey)
-                    ),
-                  ],
-                ),
-              );
-            }
-            
-            // Empty state with better visuals
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.event_busy, size: 80, color: Colors.grey[400]),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'No leave applications found',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                      const SizedBox(height: 8),
+                      Text('${snapshot.error}', style: TextStyle(color: Colors.grey[600])),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _showEmployeeLeaveHistory(employeeId, employeeName);
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD40511),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'This employee has no leave history yet',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => LeaveApplicationForm(
-                              employeeId: employeeId,
-                              employeeName: employeeName,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Create Leave Application'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD40511),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-            
-            // Group applications by year for better organization
-            final applications = snapshot.data!;
-            final applicationsByYear = <int, List<LeaveApplication>>{};
-            
-            // Group applications by year
-            for (final application in applications) {
-              final year = application.startDate.year;
-              if (!applicationsByYear.containsKey(year)) {
-                applicationsByYear[year] = [];
+                    ],
+                  ),
+                );
               }
-              applicationsByYear[year]!.add(application);
-            }
-            
-            // Sort years in descending order (newest first)
-            final years = applicationsByYear.keys.toList()..sort((a, b) => b.compareTo(a));
-            
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: years.length,
-              itemBuilder: (context, yearIndex) {
-                final year = years[yearIndex];
-                final yearApplications = applicationsByYear[year]!;
-                
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Year header
-                    Container(
-                      margin: const EdgeInsets.only(top: 8, bottom: 16, left: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD40511).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
+              
+              // Loading state
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: Color(0xFFD40511)),
+                      SizedBox(height: 24),
+                      Text("Loading leave history...", 
+                        style: TextStyle(color: Colors.grey)
                       ),
-                      child: Text(
-                        '$year',
-                        style: const TextStyle(
-                          fontSize: 16,
+                    ],
+                  ),
+                );
+              }
+              
+              // Empty state with better visuals
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.event_busy, size: 80, color: Colors.grey[400]),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'No leave applications found',
+                        style: TextStyle(
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFD40511),
                         ),
                       ),
-                    ),
-                    // Leave applications for this year
-                    ...yearApplications.map((leave) {
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        elevation: 1,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 8),
+                      Text(
+                        'This employee has no leave history yet',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
                         ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => LeaveDetailScreen(leaveId: leave.id),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => LeaveApplicationForm(
+                                employeeId: employeeId,
+                                employeeName: employeeName,
                               ),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          leave.leaveType.toLowerCase().contains('annual') 
-                                              ? Icons.beach_access
-                                              : leave.leaveType.toLowerCase().contains('medical')
-                                                  ? Icons.medical_services
-                                                  : Icons.event,
-                                          color: const Color(0xFFD40511),
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          leave.leaveType,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    _getStatusChip(leave.status),
-                                  ],
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create Leave Application'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD40511),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              
+              // Group applications by year for better organization
+              final applications = snapshot.data!;
+              final applicationsByYear = <int, List<LeaveApplication>>{};
+              
+              // Group applications by year
+              for (final application in applications) {
+                final year = application.startDate.year;
+                if (!applicationsByYear.containsKey(year)) {
+                  applicationsByYear[year] = [];
+                }
+                applicationsByYear[year]!.add(application);
+              }
+              
+              // Sort years in descending order (newest first)
+              final years = applicationsByYear.keys.toList()..sort((a, b) => b.compareTo(a));
+              
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: years.length,
+                itemBuilder: (context, yearIndex) {
+                  final year = years[yearIndex];
+                  final yearApplications = applicationsByYear[year]!;
+                  
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Year header
+                      Container(
+                        margin: const EdgeInsets.only(top: 8, bottom: 16, left: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD40511).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          '$year',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFD40511),
+                          ),
+                        ),
+                      ),
+                      // Leave applications for this year
+                      ...yearApplications.map((leave) {
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => LeaveDetailScreen(leaveId: leave.id),
                                 ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Icon(Icons.date_range, size: 16, color: Colors.grey[600]),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${DateFormat('MMM d').format(leave.startDate)} to ${DateFormat('MMM d').format(leave.endDate)}',
-                                      style: const TextStyle(fontWeight: FontWeight.w500),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '(${leave.calculateDuration()} days)',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (leave.reason != null && leave.reason!.isNotEmpty) ...[
-                                  const SizedBox(height: 8),
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'Reason: ${leave.reason}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.grey[700],
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            leave.leaveType.toLowerCase().contains('annual') 
+                                                ? Icons.beach_access
+                                                : leave.leaveType.toLowerCase().contains('medical')
+                                                    ? Icons.medical_services
+                                                    : Icons.event,
+                                            color: const Color(0xFFD40511),
+                                            size: 18,
                                           ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            leave.leaveType,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      _getStatusChip(leave.status),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.date_range, size: 16, color: Colors.grey[600]),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '${DateFormat('MMM d').format(leave.startDate)} to ${DateFormat('MMM d').format(leave.endDate)}',
+                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '(${leave.calculateDuration()} days)',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey[600],
                                         ),
                                       ),
                                     ],
                                   ),
-                                ],
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'View Details',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.blue[700],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      Icons.arrow_forward_ios,
-                                      size: 12,
-                                      color: Colors.blue[700],
+                                  if (leave.reason != null && leave.reason!.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Reason: ${leave.reason}',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey[700],
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
-                                ),
-                              ],
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'View Details',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.blue[700],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.arrow_forward_ios,
+                                        size: 12,
+                                        color: Colors.blue[700],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ],
-                );
-              },
-            );
-          },
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => LeaveApplicationForm(
-                  employeeId: employeeId,
-                  employeeName: employeeName,
+                        );
+                      }).toList(),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => LeaveApplicationForm(
+                    employeeId: employeeId,
+                    employeeName: employeeName,
+                  ),
                 ),
-              ),
-            );
-          },
-          backgroundColor: const Color(0xFFD40511),
-          child: const Icon(Icons.add),
+              );
+            },
+            backgroundColor: const Color(0xFFD40511),
+            child: const Icon(Icons.add),
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
   
   // Show Edit Employee Dialog
   void _showEditEmployeeDialog(String employeeId, String employeeName) {
@@ -2450,4 +2515,3 @@ void _showEmployeeLeaveHistory(String employeeId, String employeeName) {
     }
   }
 }
-              

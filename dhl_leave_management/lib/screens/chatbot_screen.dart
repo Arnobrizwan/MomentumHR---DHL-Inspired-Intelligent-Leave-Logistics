@@ -538,31 +538,28 @@ Make your responses detailed, professional, and specific to the user's role.
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!message.isUser) ...[
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFCC00), // DHL Yellow
-                borderRadius: BorderRadius.circular(2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 3,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Text(
-                  "DHL",
-                  style: TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
+           Container(
+  width: 54,
+  height: 28,
+  decoration: BoxDecoration(
+    borderRadius: BorderRadius.circular(2),
+    color: const Color(0xFFFFCC00), // DHL Yellow background
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.1),
+        blurRadius: 3,
+        offset: const Offset(0, 1),
+      ),
+    ],
+  ),
+  child: ClipRRect(
+    borderRadius: BorderRadius.circular(2),
+    child: Image.asset(
+      'assets/DHL_Express_logo_rgb.png',
+      fit: BoxFit.cover,
+    ),
+  ),
+),
             const SizedBox(width: 8),
           ],
           Flexible(
