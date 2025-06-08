@@ -27,50 +27,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   String _userName = 'HR Admin';
   Map? _userDetails;
-  
+
   // Initialize services
   final AuthService _authService = AuthService();
   final FirebaseService _firebaseService = FirebaseService();
-  
-  // For filtering employees
-  final TextEditingController _employeeSearchController = TextEditingController();
+
+  // For filtering employees - FIXED: Use late final to prevent recreation
+  late final TextEditingController _employeeSearchController;
   String _employeeSearchQuery = '';
 
-  /// Keep the search field focused across rebuilds
-  final FocusNode _employeeSearchFocus = FocusNode();
-  final FocusNode _leaveSearchFocus = FocusNode();
+  /// Keep the search field focused across rebuilds - FIXED: Use late final
+  late final FocusNode _employeeSearchFocus;
+  late final FocusNode _leaveSearchFocus;
 
   /// Debounce timer so we don't rebuild on every keystroke
   Timer? _searchDebounce;
   Timer? _leaveSearchDebounce;
-  
-  // For filtering leave applications
+
+  // For filtering leave applications - FIXED: Use late final
   String _leaveStatusFilter = 'All';
-  final TextEditingController _leaveSearchController = TextEditingController();
+  late final TextEditingController _leaveSearchController;
   String _leaveSearchQuery = '';
 
   DateTimeRange? _selectedDateRange;
-  
+
   @override
   void initState() {
     super.initState();
+
+    // FIXED: Initialize controllers only once in initState
+    _employeeSearchController = TextEditingController();
+    _leaveSearchController = TextEditingController();
+    _employeeSearchFocus = FocusNode();
+    _leaveSearchFocus = FocusNode();
+
     _loadUserData();
-    
+
     _employeeSearchController.addListener(_onSearchChanged);
     _leaveSearchController.addListener(_onLeaveSearchChanged);
   }
-  
+
   @override
   void dispose() {
     _searchDebounce?.cancel();
     _leaveSearchDebounce?.cancel();
+
+    // FIXED: Properly dispose controllers and focus nodes
+    _employeeSearchController.removeListener(_onSearchChanged);
+    _leaveSearchController.removeListener(_onLeaveSearchChanged);
     _employeeSearchController.dispose();
     _employeeSearchFocus.dispose();
     _leaveSearchController.dispose();
     _leaveSearchFocus.dispose();
     super.dispose();
   }
-  
+
   Future<void> _loadUserData() async {
     try {
       final userDetails = await _authService.getCurrentUserDetails();
@@ -99,30 +110,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
   }
-  
+
   void _onSearchChanged() {
     // cancel any pending timer
     if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
 
     // wait 300 ms after the last keystroke to rebuild
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
-      setState(() {
-        _employeeSearchQuery = _employeeSearchController.text.toLowerCase();
-      });
-     // _employeeSearchFocus.requestFocus();
+      final newQuery = _employeeSearchController.text.toLowerCase();
+      // FIXED: Only setState if query actually changed
+      if (newQuery != _employeeSearchQuery) {
+        setState(() {
+          _employeeSearchQuery = newQuery;
+        });
+        // FIXED: Restore focus after rebuild
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_employeeSearchFocus.canRequestFocus) {
+            _employeeSearchFocus.requestFocus();
+          }
+        });
+      }
     });
   }
-  
+
   void _onLeaveSearchChanged() {
     if (_leaveSearchDebounce?.isActive ?? false) _leaveSearchDebounce!.cancel();
     _leaveSearchDebounce = Timer(const Duration(milliseconds: 300), () {
-      setState(() {
-        _leaveSearchQuery = _leaveSearchController.text.toLowerCase();
-      });
-      //_leaveSearchFocus.requestFocus();
+      final newQuery = _leaveSearchController.text.toLowerCase();
+      // FIXED: Only setState if query actually changed
+      if (newQuery != _leaveSearchQuery) {
+        setState(() {
+          _leaveSearchQuery = newQuery;
+        });
+        // FIXED: Restore focus after rebuild
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_leaveSearchFocus.canRequestFocus) {
+            _leaveSearchFocus.requestFocus();
+          }
+        });
+      }
     });
   }
-  
+
   Future<void> _logout() async {
     try {
       await _authService.logout();
@@ -140,7 +169,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,13 +265,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ListTile(
                 leading: Icon(
                   Icons.dashboard,
-                  color: _selectedIndex == 0 ? const Color(0xFFD40511) : Colors.grey[700],
+                  color: _selectedIndex == 0
+                      ? const Color(0xFFD40511)
+                      : Colors.grey[700],
                 ),
                 title: Text(
                   'Dashboard',
                   style: TextStyle(
-                    fontWeight: _selectedIndex == 0 ? FontWeight.bold : FontWeight.normal,
-                    color: _selectedIndex == 0 ? const Color(0xFFD40511) : Colors.black87,
+                    fontWeight: _selectedIndex == 0
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: _selectedIndex == 0
+                        ? const Color(0xFFD40511)
+                        : Colors.black87,
                   ),
                 ),
                 selected: _selectedIndex == 0,
@@ -257,13 +292,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ListTile(
                 leading: Icon(
                   Icons.people,
-                  color: _selectedIndex == 1 ? const Color(0xFFD40511) : Colors.grey[700],
+                  color: _selectedIndex == 1
+                      ? const Color(0xFFD40511)
+                      : Colors.grey[700],
                 ),
                 title: Text(
                   'Employees',
                   style: TextStyle(
-                    fontWeight: _selectedIndex == 1 ? FontWeight.bold : FontWeight.normal,
-                    color: _selectedIndex == 1 ? const Color(0xFFD40511) : Colors.black87,
+                    fontWeight: _selectedIndex == 1
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: _selectedIndex == 1
+                        ? const Color(0xFFD40511)
+                        : Colors.black87,
                   ),
                 ),
                 selected: _selectedIndex == 1,
@@ -278,13 +319,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ListTile(
                 leading: Icon(
                   Icons.calendar_today,
-                  color: _selectedIndex == 2 ? const Color(0xFFD40511) : Colors.grey[700],
+                  color: _selectedIndex == 2
+                      ? const Color(0xFFD40511)
+                      : Colors.grey[700],
                 ),
                 title: Text(
                   'Leave Applications',
                   style: TextStyle(
-                    fontWeight: _selectedIndex == 2 ? FontWeight.bold : FontWeight.normal,
-                    color: _selectedIndex == 2 ? const Color(0xFFD40511) : Colors.black87,
+                    fontWeight: _selectedIndex == 2
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: _selectedIndex == 2
+                        ? const Color(0xFFD40511)
+                        : Colors.black87,
                   ),
                 ),
                 selected: _selectedIndex == 2,
@@ -299,13 +346,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ListTile(
                 leading: Icon(
                   Icons.settings,
-                  color: _selectedIndex == 3 ? const Color(0xFFD40511) : Colors.grey[700],
+                  color: _selectedIndex == 3
+                      ? const Color(0xFFD40511)
+                      : Colors.grey[700],
                 ),
                 title: Text(
                   'Settings',
                   style: TextStyle(
-                    fontWeight: _selectedIndex == 3 ? FontWeight.bold : FontWeight.normal,
-                    color: _selectedIndex == 3 ? const Color(0xFFD40511) : Colors.black87,
+                    fontWeight: _selectedIndex == 3
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: _selectedIndex == 3
+                        ? const Color(0xFFD40511)
+                        : Colors.black87,
                   ),
                 ),
                 selected: _selectedIndex == 3,
@@ -374,7 +427,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           : null,
     );
   }
-  
+
   Widget _buildDashboard() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -417,8 +470,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              if (!snapshot.hasData || snapshot.data == null || snapshot.data!.isEmpty) {
-                return const Center(child: Text('No leave statistics available'));
+              if (!snapshot.hasData ||
+                  snapshot.data == null ||
+                  snapshot.data!.isEmpty) {
+                return const Center(
+                    child: Text('No leave statistics available'));
               }
               final stats = snapshot.data!;
               final totalLeaves = stats['total'] ?? 0;
@@ -428,7 +484,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               final annualLeaves = stats['type']?['annual'] ?? 0;
               final medicalLeaves = stats['type']?['medical'] ?? 0;
               final emergencyLeaves = stats['type']?['emergency'] ?? 0;
-              
+
               return Column(
                 children: [
                   // Status Statistics
@@ -491,7 +547,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      Icon(Icons.pie_chart,
+                                      Icon(
+                                        Icons.pie_chart,
                                         color: Colors.grey[700],
                                         size: 18,
                                       ),
@@ -557,11 +614,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      _buildLegendItem('Pending', const Color(0xFFFFA000)),
+                                      _buildLegendItem(
+                                          'Pending', const Color(0xFFFFA000)),
                                       const SizedBox(width: 20),
-                                      _buildLegendItem('Approved', const Color(0xFF43A047)),
+                                      _buildLegendItem(
+                                          'Approved', const Color(0xFF43A047)),
                                       const SizedBox(width: 20),
-                                      _buildLegendItem('Rejected', const Color(0xFFE53935)),
+                                      _buildLegendItem(
+                                          'Rejected', const Color(0xFFE53935)),
                                     ],
                                   ),
                                 ],
@@ -584,7 +644,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      Icon(Icons.pie_chart,
+                                      Icon(
+                                        Icons.pie_chart,
                                         color: Colors.grey[700],
                                         size: 18,
                                       ),
@@ -650,11 +711,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      _buildLegendItem('Annual', const Color(0xFF1976D2)),
+                                      _buildLegendItem(
+                                          'Annual', const Color(0xFF1976D2)),
                                       const SizedBox(width: 20),
-                                      _buildLegendItem('Medical', const Color(0xFF9C27B0)),
+                                      _buildLegendItem(
+                                          'Medical', const Color(0xFF9C27B0)),
                                       const SizedBox(width: 20),
-                                      _buildLegendItem('Emergency', const Color(0xFFFFB300)),
+                                      _buildLegendItem(
+                                          'Emergency', const Color(0xFFFFB300)),
                                     ],
                                   ),
                                 ],
@@ -685,7 +749,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.history,
+                          Icon(
+                            Icons.history,
                             color: Colors.grey[700],
                             size: 18,
                           ),
@@ -723,11 +788,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: StreamBuilder<List<LeaveApplication>>(
                       stream: _firebaseService.getAllLeaveApplications(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
                         }
                         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return const Center(child: Text('No leave applications found'));
+                          return const Center(
+                              child: Text('No leave applications found'));
                         }
                         final applications = snapshot.data!;
                         final recentApplications = applications.length > 5
@@ -735,17 +803,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             : applications;
                         return ListView.separated(
                           itemCount: recentApplications.length,
-                          separatorBuilder: (context, index) => Divider(color: Colors.grey[200]),
+                          separatorBuilder: (context, index) =>
+                              Divider(color: Colors.grey[200]),
                           itemBuilder: (context, index) {
                             final application = recentApplications[index];
                             return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 4, horizontal: 8),
                               leading: CircleAvatar(
-                                backgroundColor: const Color(0xFFD40511).withOpacity(0.1),
+                                backgroundColor:
+                                    const Color(0xFFD40511).withOpacity(0.1),
                                 child: Text(
                                   application.employeeName.isNotEmpty
-                                    ? application.employeeName.substring(0, 1).toUpperCase()
-                                    : '?',
+                                      ? application.employeeName
+                                          .substring(0, 1)
+                                          .toUpperCase()
+                                      : '?',
                                   style: const TextStyle(
                                     color: Color(0xFFD40511),
                                     fontWeight: FontWeight.bold,
@@ -780,7 +853,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               onTap: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (context) => LeaveDetailScreen(leaveId: application.id),
+                                    builder: (context) => LeaveDetailScreen(
+                                        leaveId: application.id),
                                   ),
                                 );
                               },
@@ -798,8 +872,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-  
-  // UPDATED EMPLOYEE LIST IMPLEMENTATION
+
+  // FIXED EMPLOYEE LIST IMPLEMENTATION
   Widget _buildEmployeesList() {
     return Container(
       color: Colors.grey[100],
@@ -814,7 +888,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('No employees found', style: TextStyle(fontSize: 18)),
+                  const Text('No employees found',
+                      style: TextStyle(fontSize: 18)),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed: _showAddEmployeeDialog,
@@ -822,14 +897,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     label: const Text('Add Employee'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFD40511),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
                     ),
                   ),
                 ],
               ),
             );
           }
-          
+
           // filter
           var employees = snapshot.data!.docs;
           if (_employeeSearchQuery.isNotEmpty) {
@@ -839,11 +915,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               final id = (data['id'] as String? ?? '').toLowerCase();
               final dept = (data['department'] as String? ?? '').toLowerCase();
               return name.contains(_employeeSearchQuery) ||
-                    id.contains(_employeeSearchQuery) ||
-                    dept.contains(_employeeSearchQuery);
+                  id.contains(_employeeSearchQuery) ||
+                  dept.contains(_employeeSearchQuery);
             }).toList();
           }
-          
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -852,7 +928,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.people, color: Color(0xFFD40511), size: 28),
+                    const Icon(Icons.people,
+                        color: Color(0xFFD40511), size: 28),
                     const SizedBox(width: 12),
                     const Text('Employees',
                         style: TextStyle(
@@ -868,17 +945,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         backgroundColor: const Color(0xFFD40511),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
                       ),
                     ),
                   ],
                 ),
               ),
-              
-              // SEARCH FIELD with focusNode
+
+              // FIXED SEARCH FIELD with persistent focusNode
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: TextField(
                   focusNode: _employeeSearchFocus,
                   controller: _employeeSearchController,
@@ -891,7 +969,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             onPressed: () {
                               _employeeSearchController.clear();
                               setState(() => _employeeSearchQuery = '');
-                              _employeeSearchFocus.requestFocus();
+                              // FIXED: Immediately refocus after clearing
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                _employeeSearchFocus.requestFocus();
+                              });
                             },
                           )
                         : null,
@@ -906,14 +987,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
-              
+
               // count
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                 child: Text('Showing ${employees.length} employees',
                     style: TextStyle(color: Colors.grey[700], fontSize: 12)),
               ),
-              
+
               // list
               Expanded(
                 child: employees.isEmpty
@@ -930,8 +1011,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           final data = doc.data()! as Map<String, dynamic>;
                           final id = data['id'] as String? ?? '';
                           final name = data['name'] as String? ?? 'Unknown';
-                          final dept =
-                              data['department'] as String? ?? 'Department not assigned';
+                          final dept = data['department'] as String? ??
+                              'Department not assigned';
                           return Card(
                             key: ValueKey(id),
                             margin: const EdgeInsets.only(bottom: 16),
@@ -955,15 +1036,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           fontWeight: FontWeight.w500,
                                           fontSize: 16)),
                                   subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const SizedBox(height: 4),
                                       Text('ID: $id',
                                           style: TextStyle(
-                                              color: Colors.grey[700], fontSize: 13)),
+                                              color: Colors.grey[700],
+                                              fontSize: 13)),
                                       Text(dept,
                                           style: TextStyle(
-                                              color: Colors.grey[700], fontSize: 13)),
+                                              color: Colors.grey[700],
+                                              fontSize: 13)),
                                     ],
                                   ),
                                   trailing: IconButton(
@@ -995,8 +1079,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               foregroundColor:
                                                   const Color(0xFFD40511),
                                               side: const BorderSide(
-                                                  color:
-                                                      Color(0xFFD40511))),
+                                                  color: Color(0xFFD40511))),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
@@ -1005,8 +1088,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           onPressed: () =>
                                               _showEmployeeLeaveHistory(
                                                   id, name),
-                                          icon:
-                                              const Icon(Icons.history, size: 18),
+                                          icon: const Icon(Icons.history,
+                                              size: 18),
                                           label: const Text('Leave History'),
                                           style: OutlinedButton.styleFrom(
                                               foregroundColor: Colors.blue,
@@ -1029,7 +1112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-  
+
   Widget _buildLeaveApplicationsList() {
     return Container(
       color: Colors.grey[100],
@@ -1039,13 +1122,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('No leave applications found', style: TextStyle(fontSize: 18)),
+                  const Text('No leave applications found',
+                      style: TextStyle(fontSize: 18)),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed: () {
@@ -1059,44 +1143,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     label: const Text('Create Leave Application'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFD40511),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
                     ),
                   ),
                 ],
               ),
             );
           }
-          
+
           // Apply filters
           var applications = snapshot.data!;
-          
+
           // Date range filter
           if (_selectedDateRange != null) {
             applications = applications.where((app) {
               // include any applications whose start or end date falls in the range
-              return (app.startDate.isAfter(_selectedDateRange!.start.subtract(const Duration(days:1))) &&
-                     app.startDate.isBefore(_selectedDateRange!.end.add(const Duration(days:1))))
-                  || (app.endDate.isAfter(_selectedDateRange!.start.subtract(const Duration(days:1))) &&
-                     app.endDate.isBefore(_selectedDateRange!.end.add(const Duration(days:1))));
+              return (app.startDate.isAfter(_selectedDateRange!.start
+                          .subtract(const Duration(days: 1))) &&
+                      app.startDate.isBefore(_selectedDateRange!.end
+                          .add(const Duration(days: 1)))) ||
+                  (app.endDate.isAfter(_selectedDateRange!.start
+                          .subtract(const Duration(days: 1))) &&
+                      app.endDate.isBefore(_selectedDateRange!.end
+                          .add(const Duration(days: 1))));
             }).toList();
           }
-          
+
           // Filter by status
           if (_leaveStatusFilter != 'All') {
-            applications = applications.where((app) => 
-              app.status.toLowerCase() == _leaveStatusFilter.toLowerCase()
-            ).toList();
+            applications = applications
+                .where((app) =>
+                    app.status.toLowerCase() ==
+                    _leaveStatusFilter.toLowerCase())
+                .toList();
           }
-          
+
           // Filter by search query
           if (_leaveSearchQuery.isNotEmpty) {
             applications = applications.where((app) {
-              return app.employeeName.toLowerCase().contains(_leaveSearchQuery) ||
-                     app.employeeId.toLowerCase().contains(_leaveSearchQuery) ||
-                     app.leaveType.toLowerCase().contains(_leaveSearchQuery);
+              return app.employeeName
+                      .toLowerCase()
+                      .contains(_leaveSearchQuery) ||
+                  app.employeeId.toLowerCase().contains(_leaveSearchQuery) ||
+                  app.leaveType.toLowerCase().contains(_leaveSearchQuery);
             }).toList();
           }
-          
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1126,11 +1219,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.grey.shade300),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 4),
                       child: DropdownButton<String>(
                         value: _leaveStatusFilter,
                         underline: const SizedBox(),
-                        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFD40511)),
+                        icon: const Icon(Icons.arrow_drop_down,
+                            color: Color(0xFFD40511)),
                         items: ['All', 'Pending', 'Approved', 'Rejected']
                             .map((String value) {
                           return DropdownMenuItem<String>(
@@ -1150,10 +1245,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-              
+
               // Filters
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     Expanded(
@@ -1162,96 +1258,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         controller: _leaveSearchController,
                         decoration: InputDecoration(
                           hintText: 'Search applications...',
-                          prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                          suffixIcon: _leaveSearchQuery.isNotEmpty 
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  _leaveSearchController.clear();
-                                  setState(() => _leaveSearchQuery = '');
-                                  _leaveSearchFocus.requestFocus();
-                                },
-                              )
-                            : null,
+                          prefixIcon:
+                              const Icon(Icons.search, color: Colors.grey),
+                          suffixIcon: _leaveSearchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _leaveSearchController.clear();
+                                    setState(() => _leaveSearchQuery = '');
+                                    // FIXED: Immediately refocus after clearing
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                      _leaveSearchFocus.requestFocus();
+                                    });
+                                  },
+                                )
+                              : null,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: BorderSide.none,
                           ),
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 0, horizontal: 16),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                   
-Container(
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(8),
-  ),
-  child: Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      // Simple icon button that shows the date picker
-      IconButton(
-        onPressed: () async {
-          final picked = await showDateRangePicker(
-            context: context,
-            firstDate: DateTime(2020),
-            lastDate: DateTime.now().add(const Duration(days: 365)),
-            initialDateRange: _selectedDateRange,
-            builder: (context, child) {
-              return Theme(
-                data: ThemeData.light().copyWith(
-                  colorScheme: const ColorScheme.light(
-                    primary: Color(0xFFD40511),
-                    onPrimary: Colors.white,
-                  ),
-                ),
-                child: child!,
-              );
-            },
-          );
-          
-          if (picked != null) {
-            setState(() {
-              _selectedDateRange = picked;
-            });
-          }
-        },
-        icon: const Icon(Icons.date_range, color: Color(0xFFD40511)),
-        tooltip: 'Filter by Date',
-      ),
-      
-      // Show the selected date range if available
-      if (_selectedDateRange != null)
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: Text(
-            '${DateFormat("MM/dd").format(_selectedDateRange!.start)} - ${DateFormat("MM/dd").format(_selectedDateRange!.end)}',
-            style: const TextStyle(fontSize: 12),
-          ),
-        ),
-        
-      // Only show clear button when a date range is selected
-      if (_selectedDateRange != null)
-        IconButton(
-          icon: const Icon(Icons.clear, size: 18),
-          onPressed: () {
-            setState(() {
-              _selectedDateRange = null;
-            });
-          },
-          tooltip: 'Clear date filter',
-        ),
-    ],
-  ),
-),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Simple icon button that shows the date picker
+                          IconButton(
+                            onPressed: () async {
+                              final picked = await showDateRangePicker(
+                                context: context,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime.now()
+                                    .add(const Duration(days: 365)),
+                                initialDateRange: _selectedDateRange,
+                                builder: (context, child) {
+                                  return Theme(
+                                    data: ThemeData.light().copyWith(
+                                      colorScheme: const ColorScheme.light(
+                                        primary: Color(0xFFD40511),
+                                        onPrimary: Colors.white,
+                                      ),
+                                    ),
+                                    child: child!,
+                                  );
+                                },
+                              );
+
+                              if (picked != null) {
+                                setState(() {
+                                  _selectedDateRange = picked;
+                                });
+                              }
+                            },
+                            icon: const Icon(Icons.date_range,
+                                color: Color(0xFFD40511)),
+                            tooltip: 'Filter by Date',
+                          ),
+
+                          // Show the selected date range if available
+                          if (_selectedDateRange != null)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Text(
+                                '${DateFormat("MM/dd").format(_selectedDateRange!.start)} - ${DateFormat("MM/dd").format(_selectedDateRange!.end)}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+
+                          // Only show clear button when a date range is selected
+                          if (_selectedDateRange != null)
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                setState(() {
+                                  _selectedDateRange = null;
+                                });
+                              },
+                              tooltip: 'Clear date filter',
+                            ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-              
+
               // Applications count
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
@@ -1260,7 +1363,7 @@ Container(
                   style: TextStyle(color: Colors.grey[700], fontSize: 12),
                 ),
               ),
-              
+
               // Applications list
               Expanded(
                 child: applications.isEmpty
@@ -1271,7 +1374,8 @@ Container(
                         ),
                       )
                     : ListView.builder(
-                        key: const PageStorageKey<String>('leaveApplicationsListView'),
+                        key: const PageStorageKey<String>(
+                            'leaveApplicationsListView'),
                         padding: const EdgeInsets.all(16),
                         itemCount: applications.length,
                         itemBuilder: (context, index) {
@@ -1289,16 +1393,22 @@ Container(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Row(
                                         children: [
                                           CircleAvatar(
-                                            backgroundColor: const Color(0xFFD40511).withOpacity(0.1),
+                                            backgroundColor:
+                                                const Color(0xFFD40511)
+                                                    .withOpacity(0.1),
                                             child: Text(
-                                              application.employeeName.isNotEmpty 
-                                                ? application.employeeName.substring(0, 1).toUpperCase()
-                                                : '?',
+                                              application
+                                                      .employeeName.isNotEmpty
+                                                  ? application.employeeName
+                                                      .substring(0, 1)
+                                                      .toUpperCase()
+                                                  : '?',
                                               style: const TextStyle(
                                                 color: Color(0xFFD40511),
                                                 fontWeight: FontWeight.bold,
@@ -1307,7 +1417,8 @@ Container(
                                           ),
                                           const SizedBox(width: 12),
                                           Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 application.employeeName,
@@ -1337,7 +1448,8 @@ Container(
                                     decoration: BoxDecoration(
                                       color: Colors.grey[50],
                                       borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey.shade200),
+                                      border: Border.all(
+                                          color: Colors.grey.shade200),
                                     ),
                                     child: Column(
                                       children: [
@@ -1415,60 +1527,82 @@ Container(
                                   ),
                                   const SizedBox(height: 16),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       OutlinedButton.icon(
                                         onPressed: () {
                                           Navigator.of(context).push(
                                             MaterialPageRoute(
-                                              builder: (context) => LeaveDetailScreen(leaveId: application.id),
+                                              builder: (context) =>
+                                                  LeaveDetailScreen(
+                                                      leaveId: application.id),
                                             ),
                                           );
                                         },
-                                        icon: const Icon(Icons.visibility, size: 16),
+                                        icon: const Icon(Icons.visibility,
+                                            size: 16),
                                         label: const Text('View Details'),
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: Colors.blue,
-                                          side: const BorderSide(color: Colors.blue),
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          side: const BorderSide(
+                                              color: Colors.blue),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 8),
                                         ),
                                       ),
                                       Row(
                                         children: [
-                                          if (application.status == 'Pending') ...[
+                                          if (application.status ==
+                                              'Pending') ...[
                                             TextButton(
                                               onPressed: () {
-                                                _showRejectDialog(application.id);
+                                                _showRejectDialog(
+                                                    application.id);
                                               },
                                               child: const Text('Reject'),
                                               style: TextButton.styleFrom(
                                                 foregroundColor: Colors.red,
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 8),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
                                             ElevatedButton(
                                               onPressed: () {
-                                                _updateLeaveStatus(application.id, 'Approved');
+                                                _updateLeaveStatus(
+                                                    application.id, 'Approved');
                                               },
                                               child: const Text('Approve'),
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: Colors.green,
                                                 foregroundColor: Colors.white,
                                                 elevation: 0,
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 8),
                                               ),
                                             ),
                                           ],
-                                          if (application.status != 'Pending') ...[
+                                          if (application.status !=
+                                              'Pending') ...[
                                             TextButton(
                                               onPressed: () {
-                                                _updateLeaveStatus(application.id, 'Pending');
+                                                _updateLeaveStatus(
+                                                    application.id, 'Pending');
                                               },
-                                              child: const Text('Reset to Pending'),
+                                              child: const Text(
+                                                  'Reset to Pending'),
                                               style: TextButton.styleFrom(
-                                                foregroundColor: Colors.grey[700],
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                foregroundColor:
+                                                    Colors.grey[700],
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 8),
                                               ),
                                             ),
                                           ],
@@ -1489,7 +1623,7 @@ Container(
       ),
     );
   }
-  
+
   Widget _buildSettings() {
     return Container(
       color: Colors.grey[100],
@@ -1610,7 +1744,8 @@ Container(
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.upload_file, color: Color(0xFF9C27B0)),
+                  leading:
+                      const Icon(Icons.upload_file, color: Color(0xFF9C27B0)),
                   title: const Text('Import Excel Data'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
@@ -1623,7 +1758,8 @@ Container(
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.support_agent, color: Color(0xFFFFA000)),
+                  leading:
+                      const Icon(Icons.support_agent, color: Color(0xFFFFA000)),
                   title: const Text('AI Assistant'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
@@ -1636,13 +1772,15 @@ Container(
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.notifications, color: Color(0xFF1976D2)),
+                  leading:
+                      const Icon(Icons.notifications, color: Color(0xFF1976D2)),
                   title: const Text('Notification Settings'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => const HRNotificationSettingsScreen(),
+                        builder: (context) =>
+                            const HRNotificationSettingsScreen(),
                       ),
                     );
                   },
@@ -1695,8 +1833,9 @@ Container(
       ),
     );
   }
-  
-  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
+
+  Widget _buildStatCard(
+      String title, String value, Color color, IconData icon) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -1737,7 +1876,7 @@ Container(
       ),
     );
   }
-  
+
   Widget _buildLegendItem(String title, Color color) {
     return Row(
       children: [
@@ -1760,7 +1899,7 @@ Container(
       ],
     );
   }
-  
+
   Widget _getStatusChip(String status) {
     Color color;
     IconData icon;
@@ -1809,16 +1948,16 @@ Container(
       ),
     );
   }
-  
+
   // DIALOG METHODS FOR EMPLOYEE AND LEAVE MANAGEMENT
-  
+
   // Add Employee Dialog
   void _showAddEmployeeDialog() {
     final nameController = TextEditingController();
     final idController = TextEditingController();
     final departmentController = TextEditingController();
     final emailController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1869,23 +2008,26 @@ Container(
           ),
           ElevatedButton(
             onPressed: () async {
-              if (nameController.text.trim().isEmpty || 
+              if (nameController.text.trim().isEmpty ||
                   idController.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Name and Employee ID are required')),
+                  const SnackBar(
+                      content: Text('Name and Employee ID are required')),
                 );
                 return;
               }
-              
+
               // Add the employee to Firestore
               try {
                 await _firebaseService.addEmployee(
                   id: idController.text.trim(),
                   name: nameController.text.trim(),
                   department: departmentController.text.trim(),
-                  email: emailController.text.trim().isNotEmpty ? emailController.text.trim() : null,
+                  email: emailController.text.trim().isNotEmpty
+                      ? emailController.text.trim()
+                      : null,
                 );
-                
+
                 if (mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1915,7 +2057,7 @@ Container(
       ),
     );
   }
-  
+
   // Show Employee Actions Bottom Sheet
   void _showEmployeeActions(String employeeId, String employeeName) {
     showModalBottomSheet(
@@ -1950,7 +2092,8 @@ Container(
           ),
           const Divider(),
           ListTile(
-            leading: const Icon(Icons.add_circle_outline, color: Color(0xFFD40511)),
+            leading:
+                const Icon(Icons.add_circle_outline, color: Color(0xFFD40511)),
             title: const Text('Apply for Leave'),
             onTap: () {
               Navigator.pop(context);
@@ -1993,7 +2136,7 @@ Container(
       ),
     );
   }
-  
+
   // Show Employee Leave History
   void _showEmployeeLeaveHistory(String employeeId, String employeeName) {
     Navigator.of(context).push(
@@ -2013,14 +2156,17 @@ Container(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                      Icon(Icons.error_outline,
+                          size: 64, color: Colors.red[300]),
                       const SizedBox(height: 16),
                       const Text(
                         'Error loading leave history',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      Text('${snapshot.error}', style: TextStyle(color: Colors.grey[600])),
+                      Text('${snapshot.error}',
+                          style: TextStyle(color: Colors.grey[600])),
                       const SizedBox(height: 24),
                       ElevatedButton.icon(
                         onPressed: () {
@@ -2031,14 +2177,15 @@ Container(
                         label: const Text('Retry'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFD40511),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                         ),
                       ),
                     ],
                   ),
                 );
               }
-              
+
               // Loading state
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
@@ -2047,14 +2194,13 @@ Container(
                     children: [
                       CircularProgressIndicator(color: Color(0xFFD40511)),
                       SizedBox(height: 24),
-                      Text("Loading leave history...", 
-                        style: TextStyle(color: Colors.grey)
-                      ),
+                      Text("Loading leave history...",
+                          style: TextStyle(color: Colors.grey)),
                     ],
                   ),
                 );
               }
-              
+
               // Empty state with better visuals
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return Center(
@@ -2094,18 +2240,19 @@ Container(
                         label: const Text('Create Leave Application'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFD40511),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                         ),
                       ),
                     ],
                   ),
                 );
               }
-              
+
               // Group applications by year for better organization
               final applications = snapshot.data!;
               final applicationsByYear = <int, List<LeaveApplication>>{};
-              
+
               // Group applications by year
               for (final application in applications) {
                 final year = application.startDate.year;
@@ -2114,24 +2261,27 @@ Container(
                 }
                 applicationsByYear[year]!.add(application);
               }
-              
+
               // Sort years in descending order (newest first)
-              final years = applicationsByYear.keys.toList()..sort((a, b) => b.compareTo(a));
-              
+              final years = applicationsByYear.keys.toList()
+                ..sort((a, b) => b.compareTo(a));
+
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: years.length,
                 itemBuilder: (context, yearIndex) {
                   final year = years[yearIndex];
                   final yearApplications = applicationsByYear[year]!;
-                  
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Year header
                       Container(
-                        margin: const EdgeInsets.only(top: 8, bottom: 16, left: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        margin:
+                            const EdgeInsets.only(top: 8, bottom: 16, left: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFD40511).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(16),
@@ -2158,7 +2308,8 @@ Container(
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (context) => LeaveDetailScreen(leaveId: leave.id),
+                                  builder: (context) =>
+                                      LeaveDetailScreen(leaveId: leave.id),
                                 ),
                               );
                             },
@@ -2168,14 +2319,19 @@ Container(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Row(
                                         children: [
                                           Icon(
-                                            leave.leaveType.toLowerCase().contains('annual') 
+                                            leave.leaveType
+                                                    .toLowerCase()
+                                                    .contains('annual')
                                                 ? Icons.beach_access
-                                                : leave.leaveType.toLowerCase().contains('medical')
+                                                : leave.leaveType
+                                                        .toLowerCase()
+                                                        .contains('medical')
                                                     ? Icons.medical_services
                                                     : Icons.event,
                                             color: const Color(0xFFD40511),
@@ -2197,11 +2353,13 @@ Container(
                                   const SizedBox(height: 12),
                                   Row(
                                     children: [
-                                      Icon(Icons.date_range, size: 16, color: Colors.grey[600]),
+                                      Icon(Icons.date_range,
+                                          size: 16, color: Colors.grey[600]),
                                       const SizedBox(width: 8),
                                       Text(
                                         '${DateFormat('MMM d').format(leave.startDate)} to ${DateFormat('MMM d').format(leave.endDate)}',
-                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w500),
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
@@ -2213,12 +2371,15 @@ Container(
                                       ),
                                     ],
                                   ),
-                                  if (leave.reason != null && leave.reason!.isNotEmpty) ...[
+                                  if (leave.reason != null &&
+                                      leave.reason!.isNotEmpty) ...[
                                     const SizedBox(height: 8),
                                     Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                                        Icon(Icons.info_outline,
+                                            size: 16, color: Colors.grey[600]),
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
@@ -2283,14 +2444,17 @@ Container(
       ),
     );
   }
-  
+
   // Show Edit Employee Dialog
   void _showEditEmployeeDialog(String employeeId, String employeeName) {
     _firebaseService.getEmployeeById(employeeId).then((employeeData) {
       if (employeeData != null && mounted) {
-        final nameController = TextEditingController(text: employeeData['name'] ?? '');
-        final departmentController = TextEditingController(text: employeeData['department'] ?? '');
-        final emailController = TextEditingController(text: employeeData['email'] ?? '');
+        final nameController =
+            TextEditingController(text: employeeData['name'] ?? '');
+        final departmentController =
+            TextEditingController(text: employeeData['department'] ?? '');
+        final emailController =
+            TextEditingController(text: employeeData['email'] ?? '');
 
         showDialog(
           context: context,
@@ -2349,7 +2513,7 @@ Container(
                     );
                     return;
                   }
-                  
+
                   try {
                     await _firebaseService.updateEmployee(
                       id: employeeId,
@@ -2357,7 +2521,7 @@ Container(
                       department: departmentController.text.trim(),
                       email: emailController.text.trim(),
                     );
-                    
+
                     if (mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -2389,14 +2553,15 @@ Container(
       }
     });
   }
-  
+
   // Show Delete Employee Confirmation Dialog
   void _showDeleteEmployeeConfirmation(String employeeId, String employeeName) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Employee'),
-        content: Text('Are you sure you want to delete $employeeName? This action cannot be undone.'),
+        content: Text(
+            'Are you sure you want to delete $employeeName? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -2406,7 +2571,7 @@ Container(
             onPressed: () async {
               try {
                 await _firebaseService.deleteEmployee(employeeId);
-                
+
                 if (mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2436,7 +2601,7 @@ Container(
       ),
     );
   }
-  
+
   // Show Reject Dialog for Leave Application
   Future<void> _showRejectDialog(String leaveId) async {
     final TextEditingController reasonController = TextEditingController();
@@ -2482,7 +2647,7 @@ Container(
       },
     );
   }
-  
+
   // Update Leave Status
   Future<void> _updateLeaveStatus(
     String leaveId,

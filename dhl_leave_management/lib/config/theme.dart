@@ -8,7 +8,7 @@ class DHLTheme {
   static const Color lightGray = Color(0xFFF5F5F5);
   static const Color darkGray = Color(0xFF333333);
   static const Color accentBlue = Color(0xFF007ACC);
-  
+
   // Status Colors
   static const Color pendingColor = Color(0xFFFFA500);
   static const Color approvedColor = Color(0xFF28A745);
@@ -67,9 +67,10 @@ class DHLTheme {
         ),
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -80,9 +81,12 @@ class DHLTheme {
         displayLarge: const TextStyle(color: darkGray),
         displayMedium: const TextStyle(color: darkGray),
         displaySmall: const TextStyle(color: darkGray),
-        headlineMedium: const TextStyle(color: darkGray, fontWeight: FontWeight.bold),
-        headlineSmall: const TextStyle(color: darkGray, fontWeight: FontWeight.bold),
-        titleLarge: const TextStyle(color: darkGray, fontWeight: FontWeight.bold),
+        headlineMedium:
+            const TextStyle(color: darkGray, fontWeight: FontWeight.bold),
+        headlineSmall:
+            const TextStyle(color: darkGray, fontWeight: FontWeight.bold),
+        titleLarge:
+            const TextStyle(color: darkGray, fontWeight: FontWeight.bold),
         bodyLarge: const TextStyle(color: darkGray),
         bodyMedium: const TextStyle(color: darkGray),
       ),
