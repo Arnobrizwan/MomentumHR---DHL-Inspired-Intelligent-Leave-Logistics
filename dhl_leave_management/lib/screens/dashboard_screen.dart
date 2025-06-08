@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -39,6 +40,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Keep the search field focused across rebuilds - FIXED: Use late final
   late final FocusNode _employeeSearchFocus;
   late final FocusNode _leaveSearchFocus;
+  // Prevent search from losing focus by reusing the same streams
+  late final Stream<QuerySnapshot> _employeesStream;
+  late final Stream<List<LeaveApplication>> _leaveAppsStream;
 
   /// Debounce timer so we don't rebuild on every keystroke
   Timer? _searchDebounce;
@@ -48,7 +52,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _leaveStatusFilter = 'All';
   late final TextEditingController _leaveSearchController;
   String _leaveSearchQuery = '';
-
   DateTimeRange? _selectedDateRange;
 
   @override
@@ -60,11 +63,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _leaveSearchController = TextEditingController();
     _employeeSearchFocus = FocusNode();
     _leaveSearchFocus = FocusNode();
+    // initialize streams once to avoid rebuilding and losing focus
+    _employeesStream = _firebaseService.getAllEmployees();
+    _leaveAppsStream = _firebaseService.getAllLeaveApplications();
 
     _loadUserData();
 
-    _employeeSearchController.addListener(_onSearchChanged);
-    _leaveSearchController.addListener(_onLeaveSearchChanged);
+    // REMOVED: No listeners needed to prevent refresh
+    // _employeeSearchController.addListener(_onSearchChanged);
+    // _leaveSearchController.addListener(_onLeaveSearchChanged);
   }
 
   @override
@@ -73,8 +80,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _leaveSearchDebounce?.cancel();
 
     // FIXED: Properly dispose controllers and focus nodes
-    _employeeSearchController.removeListener(_onSearchChanged);
-    _leaveSearchController.removeListener(_onLeaveSearchChanged);
+    // REMOVED: No listeners to remove
+    // _employeeSearchController.removeListener(_onSearchChanged);
+    // _leaveSearchController.removeListener(_onLeaveSearchChanged);
     _employeeSearchController.dispose();
     _employeeSearchFocus.dispose();
     _leaveSearchController.dispose();
@@ -111,46 +119,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  void _onSearchChanged() {
-    // cancel any pending timer
-    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
-
-    // wait 300 ms after the last keystroke to rebuild
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
-      final newQuery = _employeeSearchController.text.toLowerCase();
-      // FIXED: Only setState if query actually changed
-      if (newQuery != _employeeSearchQuery) {
-        setState(() {
-          _employeeSearchQuery = newQuery;
-        });
-        // FIXED: Restore focus after rebuild
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_employeeSearchFocus.canRequestFocus) {
-            _employeeSearchFocus.requestFocus();
-          }
-        });
-      }
-    });
-  }
-
-  void _onLeaveSearchChanged() {
-    if (_leaveSearchDebounce?.isActive ?? false) _leaveSearchDebounce!.cancel();
-    _leaveSearchDebounce = Timer(const Duration(milliseconds: 300), () {
-      final newQuery = _leaveSearchController.text.toLowerCase();
-      // FIXED: Only setState if query actually changed
-      if (newQuery != _leaveSearchQuery) {
-        setState(() {
-          _leaveSearchQuery = newQuery;
-        });
-        // FIXED: Restore focus after rebuild
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_leaveSearchFocus.canRequestFocus) {
-            _leaveSearchFocus.requestFocus();
-          }
-        });
-      }
-    });
-  }
+  // REMOVED: These methods are no longer needed
+  // void _onSearchChanged() { ... }
+  // void _onLeaveSearchChanged() { ... }
 
   Future<void> _logout() async {
     try {
@@ -878,7 +849,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       color: Colors.grey[100],
       child: StreamBuilder<QuerySnapshot>(
-        stream: _firebaseService.getAllEmployees(),
+        stream: _employeesStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -906,17 +877,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             );
           }
 
-          // filter
+          // FIXED: Read search directly without setState
           var employees = snapshot.data!.docs;
-          if (_employeeSearchQuery.isNotEmpty) {
+          final currentSearchQuery =
+              _employeeSearchController.text.toLowerCase();
+          if (currentSearchQuery.isNotEmpty) {
             employees = employees.where((doc) {
               final data = doc.data()! as Map<String, dynamic>;
               final name = (data['name'] as String? ?? '').toLowerCase();
               final id = (data['id'] as String? ?? '').toLowerCase();
               final dept = (data['department'] as String? ?? '').toLowerCase();
-              return name.contains(_employeeSearchQuery) ||
-                  id.contains(_employeeSearchQuery) ||
-                  dept.contains(_employeeSearchQuery);
+              return name.contains(currentSearchQuery) ||
+                  id.contains(currentSearchQuery) ||
+                  dept.contains(currentSearchQuery);
             }).toList();
           }
 
@@ -963,14 +936,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   decoration: InputDecoration(
                     hintText: 'Search employees...',
                     prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                    suffixIcon: _employeeSearchQuery.isNotEmpty
+                    suffixIcon: currentSearchQuery.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear),
                             onPressed: () {
                               _employeeSearchController.clear();
-                              setState(() => _employeeSearchQuery = '');
-                              // FIXED: Immediately refocus after clearing
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                              setState(() {});
+                              SchedulerBinding.instance
+                                  .addPostFrameCallback((_) {
                                 _employeeSearchFocus.requestFocus();
                               });
                             },
@@ -985,6 +958,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     contentPadding:
                         const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   ),
+                  onChanged: (value) {
+                    setState(() {});
+                    SchedulerBinding.instance.addPostFrameCallback((_) {
+                      _employeeSearchFocus.requestFocus();
+                    });
+                  },
                 ),
               ),
 
@@ -1117,7 +1096,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       color: Colors.grey[100],
       child: StreamBuilder<List<LeaveApplication>>(
-        stream: _firebaseService.getAllLeaveApplications(),
+        stream: _leaveAppsStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -1179,14 +1158,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 .toList();
           }
 
-          // Filter by search query
-          if (_leaveSearchQuery.isNotEmpty) {
+          // FIXED: Read search directly without setState
+          final currentLeaveSearchQuery =
+              _leaveSearchController.text.toLowerCase();
+          if (currentLeaveSearchQuery.isNotEmpty) {
             applications = applications.where((app) {
               return app.employeeName
                       .toLowerCase()
-                      .contains(_leaveSearchQuery) ||
-                  app.employeeId.toLowerCase().contains(_leaveSearchQuery) ||
-                  app.leaveType.toLowerCase().contains(_leaveSearchQuery);
+                      .contains(currentLeaveSearchQuery) ||
+                  app.employeeId
+                      .toLowerCase()
+                      .contains(currentLeaveSearchQuery) ||
+                  app.leaveType.toLowerCase().contains(currentLeaveSearchQuery);
             }).toList();
           }
 
@@ -1260,14 +1243,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           hintText: 'Search applications...',
                           prefixIcon:
                               const Icon(Icons.search, color: Colors.grey),
-                          suffixIcon: _leaveSearchQuery.isNotEmpty
+                          suffixIcon: currentLeaveSearchQuery.isNotEmpty
                               ? IconButton(
                                   icon: const Icon(Icons.clear),
                                   onPressed: () {
                                     _leaveSearchController.clear();
-                                    setState(() => _leaveSearchQuery = '');
-                                    // FIXED: Immediately refocus after clearing
-                                    WidgetsBinding.instance
+                                    setState(() {});
+                                    SchedulerBinding.instance
                                         .addPostFrameCallback((_) {
                                       _leaveSearchFocus.requestFocus();
                                     });
@@ -1283,6 +1265,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           contentPadding: const EdgeInsets.symmetric(
                               vertical: 0, horizontal: 16),
                         ),
+                        onChanged: (value) {
+                          setState(() {});
+                          SchedulerBinding.instance.addPostFrameCallback((_) {
+                            _leaveSearchFocus.requestFocus();
+                          });
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -2455,7 +2443,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             TextEditingController(text: employeeData['department'] ?? '');
         final emailController =
             TextEditingController(text: employeeData['email'] ?? '');
-
         showDialog(
           context: context,
           builder: (context) => AlertDialog(

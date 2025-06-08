@@ -20,7 +20,7 @@ class FirebaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // Leave Applications
   // ────────────────────────────────────────────────────────────────────────────
-  
+
   // Get all leave applications
   Stream<List<LeaveApplication>> getAllLeaveApplications() {
     try {
@@ -29,20 +29,19 @@ class FirebaseService {
           .orderBy('createdAt', descending: true)
           .snapshots()
           .handleError((error) {
-            print("Error in getAllLeaveApplications: $error");
-            // Return empty list on error instead of breaking the stream
-            return Stream.value([]);
-          })
-          .map((snapshot) {
-            try {
-              return snapshot.docs
-                  .map((doc) => LeaveApplication.fromFirestore(doc))
-                  .toList();
-            } catch (e) {
-              print("Error mapping documents in getAllLeaveApplications: $e");
-              return <LeaveApplication>[];
-            }
-          });
+        print("Error in getAllLeaveApplications: $error");
+        // Return empty list on error instead of breaking the stream
+        return Stream.value([]);
+      }).map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => LeaveApplication.fromFirestore(doc))
+              .toList();
+        } catch (e) {
+          print("Error mapping documents in getAllLeaveApplications: $e");
+          return <LeaveApplication>[];
+        }
+      });
     } catch (e) {
       print("Error setting up leave applications stream: $e");
       return Stream<List<LeaveApplication>>.empty();
@@ -50,41 +49,44 @@ class FirebaseService {
   }
 
   // Get leave applications for specific employee
-  Stream<List<LeaveApplication>> getEmployeeLeaveApplications(String employeeId) {
+  Stream<List<LeaveApplication>> getEmployeeLeaveApplications(
+      String employeeId) {
     try {
       // Add check for empty employee ID
       if (employeeId.isEmpty) {
-        print("Warning: Empty employeeId provided to getEmployeeLeaveApplications");
-        return Stream.value([]);  // Return empty stream for empty ID
+        print(
+            "Warning: Empty employeeId provided to getEmployeeLeaveApplications");
+        return Stream.value([]); // Return empty stream for empty ID
       }
-      
+
       print("Fetching leave applications for employee: $employeeId");
-      
+
       return _firestore
           .collection('leaveApplications')
           .where('employeeId', isEqualTo: employeeId)
           .orderBy('createdAt', descending: true)
           .snapshots()
           .handleError((error) {
-            print("Error in getEmployeeLeaveApplications for $employeeId: $error");
-            // Check if error is about missing index
-            if (error.toString().contains('index')) {
-              print("This query requires a composite index. Please check Firebase console for the creation link.");
-            }
-            return Stream.value([]);
-          })
-          .map((snapshot) {
-            try {
-              final result = snapshot.docs
-                  .map((doc) => LeaveApplication.fromFirestore(doc))
-                  .toList();
-              print("Successfully fetched ${result.length} leave applications for $employeeId");
-              return result;
-            } catch (e) {
-              print("Error mapping documents in getEmployeeLeaveApplications: $e");
-              return <LeaveApplication>[];
-            }
-          });
+        print("Error in getEmployeeLeaveApplications for $employeeId: $error");
+        // Check if error is about missing index
+        if (error.toString().contains('index')) {
+          print(
+              "This query requires a composite index. Please check Firebase console for the creation link.");
+        }
+        return Stream.value([]);
+      }).map((snapshot) {
+        try {
+          final result = snapshot.docs
+              .map((doc) => LeaveApplication.fromFirestore(doc))
+              .toList();
+          print(
+              "Successfully fetched ${result.length} leave applications for $employeeId");
+          return result;
+        } catch (e) {
+          print("Error mapping documents in getEmployeeLeaveApplications: $e");
+          return <LeaveApplication>[];
+        }
+      });
     } catch (e) {
       print("Error setting up employee leave applications stream: $e");
       return Stream<List<LeaveApplication>>.empty();
@@ -97,10 +99,11 @@ class FirebaseService {
     try {
       // Add check for empty employee ID
       if (employeeId.isEmpty) {
-        print("Warning: Empty employeeId provided to getEmployeeLeaveApplicationsByStatus");
+        print(
+            "Warning: Empty employeeId provided to getEmployeeLeaveApplicationsByStatus");
         return Stream.value([]);
       }
-      
+
       return _firestore
           .collection('leaveApplications')
           .where('employeeId', isEqualTo: employeeId)
@@ -108,24 +111,27 @@ class FirebaseService {
           .orderBy('createdAt', descending: true)
           .snapshots()
           .handleError((error) {
-            print("Error in getEmployeeLeaveApplicationsByStatus for $employeeId with status $status: $error");
-            if (error.toString().contains('index')) {
-              print("This query requires a composite index on (employeeId, status, createdAt)");
-            }
-            return Stream.value([]);
-          })
-          .map((snapshot) {
-            try {
-              return snapshot.docs
-                  .map((doc) => LeaveApplication.fromFirestore(doc))
-                  .toList();
-            } catch (e) {
-              print("Error mapping documents in getEmployeeLeaveApplicationsByStatus: $e");
-              return <LeaveApplication>[];
-            }
-          });
+        print(
+            "Error in getEmployeeLeaveApplicationsByStatus for $employeeId with status $status: $error");
+        if (error.toString().contains('index')) {
+          print(
+              "This query requires a composite index on (employeeId, status, createdAt)");
+        }
+        return Stream.value([]);
+      }).map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => LeaveApplication.fromFirestore(doc))
+              .toList();
+        } catch (e) {
+          print(
+              "Error mapping documents in getEmployeeLeaveApplicationsByStatus: $e");
+          return <LeaveApplication>[];
+        }
+      });
     } catch (e) {
-      print("Error setting up status filtered employee leave applications stream: $e");
+      print(
+          "Error setting up status filtered employee leave applications stream: $e");
       return Stream<List<LeaveApplication>>.empty();
     }
   }
@@ -139,16 +145,16 @@ class FirebaseService {
         yield [];
         return;
       }
-      
+
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       final employeeId = userDoc.data()?['employeeId'] as String?;
-      
+
       if (employeeId == null || employeeId.isEmpty) {
         print("User ${user.uid} has no associated employeeId or it's empty");
         yield [];
         return;
       }
-      
+
       yield* getEmployeeLeaveApplications(employeeId);
     } catch (e) {
       print("Error in getCurrentUserLeaveApplications: $e");
@@ -163,8 +169,9 @@ class FirebaseService {
         print("Warning: Empty leaveId provided to getLeaveApplication");
         return null;
       }
-      
-      final doc = await _firestore.collection('leaveApplications').doc(leaveId).get();
+
+      final doc =
+          await _firestore.collection('leaveApplications').doc(leaveId).get();
       if (!doc.exists) {
         print("Leave application $leaveId not found");
         return null;
@@ -188,22 +195,21 @@ class FirebaseService {
   }) async {
     try {
       if (employeeId.isEmpty) {
-        throw ArgumentError("Employee ID cannot be empty for createLeaveApplication");
+        throw ArgumentError(
+            "Employee ID cannot be empty for createLeaveApplication");
       }
-      
+
       // Using DateTime → millisecondsSinceEpoch is fine here
       final String leaveId =
           '${employeeId}_${startDate.millisecondsSinceEpoch}_${endDate.millisecondsSinceEpoch}';
-      
-      final existing = await _firestore
-          .collection('leaveApplications')
-          .doc(leaveId)
-          .get();
-          
+
+      final existing =
+          await _firestore.collection('leaveApplications').doc(leaveId).get();
+
       if (existing.exists) {
         throw Exception('A leave application already exists for these dates');
       }
-      
+
       final data = {
         'employeeId': employeeId,
         'employeeName': employeeName,
@@ -217,12 +223,9 @@ class FirebaseService {
         'updatedAt': Timestamp.now(),
         'createdBy': _auth.currentUser?.uid,
       };
-      
-      await _firestore
-          .collection('leaveApplications')
-          .doc(leaveId)
-          .set(data);
-          
+
+      await _firestore.collection('leaveApplications').doc(leaveId).set(data);
+
       return leaveId;
     } catch (e) {
       print("Error in createLeaveApplication: $e");
@@ -231,24 +234,24 @@ class FirebaseService {
   }
 
   // Update leave application status
-  Future<void> updateLeaveStatus(
-      String leaveId, String status, {String? rejectReason}) async {
+  Future<void> updateLeaveStatus(String leaveId, String status,
+      {String? rejectReason}) async {
     try {
       if (leaveId.isEmpty) {
         print("Warning: Empty leaveId provided to updateLeaveStatus");
         throw ArgumentError("Leave ID cannot be empty");
       }
-      
+
       final updateData = {
         'status': status,
         'updatedAt': Timestamp.now(),
         'updatedBy': _auth.currentUser?.uid,
       };
-      
+
       if (status == 'Rejected' && rejectReason != null) {
         updateData['rejectReason'] = rejectReason;
       }
-      
+
       await _firestore
           .collection('leaveApplications')
           .doc(leaveId)
@@ -266,7 +269,7 @@ class FirebaseService {
         print("Warning: Empty leaveId provided to deleteLeaveApplication");
         throw ArgumentError("Leave ID cannot be empty");
       }
-      
+
       await _firestore.collection('leaveApplications').doc(leaveId).delete();
     } catch (e) {
       print("Error in deleteLeaveApplication for $leaveId: $e");
@@ -277,7 +280,7 @@ class FirebaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // Employees
   // ────────────────────────────────────────────────────────────────────────────
-  
+
   // Get all employees
   Stream<QuerySnapshot> getAllEmployees() {
     try {
@@ -285,15 +288,15 @@ class FirebaseService {
           .collection('employees')
           .snapshots()
           .handleError((error) {
-            print("Error in getAllEmployees: $error");
-            throw error; // Let the UI handle the error via StreamBuilder
-          });
+        print("Error in getAllEmployees: $error");
+        throw error; // Let the UI handle the error via StreamBuilder
+      });
     } catch (e) {
       print("Error setting up employees stream: $e");
       return Stream<QuerySnapshot>.empty();
     }
   }
-  
+
   // Get all employees as a List of Maps (easier to work with)
   Future<List<Map<String, dynamic>>> getAllEmployeesAsList() async {
     try {
@@ -306,7 +309,7 @@ class FirebaseService {
       return [];
     }
   }
-  
+
   // Get employee by ID
   Future<DocumentSnapshot> getEmployee(String employeeId) async {
     try {
@@ -315,14 +318,14 @@ class FirebaseService {
         print("Warning: Empty employeeId provided to getEmployee");
         throw ArgumentError("Employee ID cannot be empty");
       }
-      
+
       return await _firestore.collection('employees').doc(employeeId).get();
     } catch (e) {
       print("Error in getEmployee for $employeeId: $e");
       throw e;
     }
   }
-  
+
   // Get employee by ID and return as Map
   Future<Map<String, dynamic>?> getEmployeeById(String employeeId) async {
     try {
@@ -331,8 +334,9 @@ class FirebaseService {
         print("Warning: Empty employeeId provided to getEmployeeById");
         return null;
       }
-      
-      final doc = await _firestore.collection('employees').doc(employeeId).get();
+
+      final doc =
+          await _firestore.collection('employees').doc(employeeId).get();
       if (doc.exists) {
         return doc.data();
       }
@@ -343,7 +347,7 @@ class FirebaseService {
       return null;
     }
   }
-  
+
   // Add a new employee
   Future<void> addEmployee({
     required String id,
@@ -356,7 +360,7 @@ class FirebaseService {
       if (id.isEmpty) {
         throw ArgumentError("Employee ID cannot be empty for addEmployee");
       }
-      
+
       final data = {
         'id': id,
         'name': name,
@@ -365,21 +369,21 @@ class FirebaseService {
         'createdAt': Timestamp.now(),
         'updatedAt': Timestamp.now(),
       };
-      
+
       // Add leave balances if provided, otherwise use defaults
       if (leaveBalances != null) {
         data['leaveBalances'] = leaveBalances;
       } else {
         data['leaveBalances'] = defaultLeaveBalances;
       }
-      
+
       await _firestore.collection('employees').doc(id).set(data);
     } catch (e) {
       print("Error in addEmployee for $id: $e");
       throw e;
     }
   }
-  
+
   // Update employee
   Future<void> updateEmployee({
     required String id,
@@ -392,35 +396,36 @@ class FirebaseService {
       if (id.isEmpty) {
         throw ArgumentError("Employee ID cannot be empty for updateEmployee");
       }
-      
+
       final updateData = {
         'name': name,
         'department': department,
         'email': email,
         'updatedAt': Timestamp.now(),
       };
-      
+
       // Only update leave balances if provided
       if (leaveBalances != null) {
         updateData['leaveBalances'] = leaveBalances;
       }
-      
+
       await _firestore.collection('employees').doc(id).update(updateData);
     } catch (e) {
       print("Error in updateEmployee for $id: $e");
       throw e;
     }
   }
-  
+
   // Update employee leave balances
   Future<void> updateEmployeeLeaveBalances(
       String employeeId, Map<String, int> leaveBalances) async {
     try {
       if (employeeId.isEmpty) {
-        print("Warning: Empty employeeId provided to updateEmployeeLeaveBalances");
+        print(
+            "Warning: Empty employeeId provided to updateEmployeeLeaveBalances");
         throw ArgumentError("Employee ID cannot be empty");
       }
-      
+
       await _firestore.collection('employees').doc(employeeId).update({
         'leaveBalances': leaveBalances,
         'updatedAt': Timestamp.now(),
@@ -430,7 +435,7 @@ class FirebaseService {
       throw e;
     }
   }
-  
+
   // Get employee leave balances
   Future<Map<String, int>> getEmployeeLeaveBalances(String employeeId) async {
     try {
@@ -439,26 +444,29 @@ class FirebaseService {
         print("Warning: Empty employeeId provided to getEmployeeLeaveBalances");
         return Map<String, int>.from(defaultLeaveBalances);
       }
-      
-      final doc = await _firestore.collection('employees').doc(employeeId).get();
+
+      final doc =
+          await _firestore.collection('employees').doc(employeeId).get();
       if (!doc.exists) {
-        print("Employee $employeeId not found, returning default leave balances");
+        print(
+            "Employee $employeeId not found, returning default leave balances");
         return Map<String, int>.from(defaultLeaveBalances);
       }
-      
+
       final data = doc.data();
       if (data == null || !data.containsKey('leaveBalances')) {
-        print("No leave balances found for employee $employeeId, returning defaults");
+        print(
+            "No leave balances found for employee $employeeId, returning defaults");
         return Map<String, int>.from(defaultLeaveBalances);
       }
-      
+
       return Map<String, int>.from(data['leaveBalances']);
     } catch (e) {
       print("Error in getEmployeeLeaveBalances for $employeeId: $e");
       return Map<String, int>.from(defaultLeaveBalances);
     }
   }
-  
+
   // Delete employee
   Future<void> deleteEmployee(String employeeId) async {
     try {
@@ -466,16 +474,16 @@ class FirebaseService {
         print("Warning: Empty employeeId provided to deleteEmployee");
         throw ArgumentError("Employee ID cannot be empty");
       }
-      
+
       // First delete the employee
       await _firestore.collection('employees').doc(employeeId).delete();
-      
+
       // Then delete all leave applications for this employee
       final leaveApplications = await _firestore
           .collection('leaveApplications')
           .where('employeeId', isEqualTo: employeeId)
           .get();
-          
+
       // Use a batch to delete multiple documents efficiently
       if (leaveApplications.docs.isNotEmpty) {
         final batch = _firestore.batch();
@@ -497,11 +505,8 @@ class FirebaseService {
         print("Warning: Empty employeeId provided to createOrUpdateEmployee");
         throw ArgumentError("Employee ID cannot be empty");
       }
-      
-      await _firestore
-          .collection('employees')
-          .doc(employeeId)
-          .set({
+
+      await _firestore.collection('employees').doc(employeeId).set({
         ...data,
         'updatedAt': Timestamp.now(),
       }, SetOptions(merge: true));
@@ -517,7 +522,7 @@ class FirebaseService {
         print("Warning: Empty userId provided to getEmployeeByUserId");
         return null;
       }
-      
+
       final qs = await _firestore
           .collection('employees')
           .where('userId', isEqualTo: userId)
@@ -529,20 +534,21 @@ class FirebaseService {
       return null;
     }
   }
-  
+
   // Get employees by department
-  Future<List<Map<String, dynamic>>> getEmployeesByDepartment(String department) async {
+  Future<List<Map<String, dynamic>>> getEmployeesByDepartment(
+      String department) async {
     try {
       if (department.isEmpty) {
         print("Warning: Empty department provided to getEmployeesByDepartment");
         return [];
       }
-      
+
       final snapshot = await _firestore
           .collection('employees')
           .where('department', isEqualTo: department)
           .get();
-      
+
       return snapshot.docs
           .map((doc) => doc.data() as Map<String, dynamic>)
           .toList();
@@ -559,7 +565,7 @@ class FirebaseService {
           .collection('leaveApplications')
           .where('status', isEqualTo: 'Pending')
           .get();
-      
+
       // Extract unique employee IDs
       final Set<String> employeeIds = {};
       for (final doc in snapshot.docs) {
@@ -569,7 +575,7 @@ class FirebaseService {
           employeeIds.add(employeeId);
         }
       }
-      
+
       return employeeIds.toList();
     } catch (e) {
       print("Error in getEmployeesWithPendingLeaves: $e");
@@ -586,7 +592,7 @@ class FirebaseService {
         print("Warning: Empty userId provided to getUser");
         throw ArgumentError("User ID cannot be empty");
       }
-      
+
       return await _firestore.collection('users').doc(userId).get();
     } catch (e) {
       print("Error in getUser for $userId: $e");
@@ -601,11 +607,8 @@ class FirebaseService {
         print("Warning: Empty userId provided to createOrUpdateUser");
         throw ArgumentError("User ID cannot be empty");
       }
-      
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .set({
+
+      await _firestore.collection('users').doc(userId).set({
         ...data,
         'updatedAt': Timestamp.now(),
       }, SetOptions(merge: true));
@@ -626,7 +629,7 @@ class FirebaseService {
       throw e;
     }
   }
-  
+
   // Get current user details
   Future<Map<String, dynamic>?> getCurrentUserDetails() async {
     try {
@@ -635,22 +638,23 @@ class FirebaseService {
         print("No authenticated user found in getCurrentUserDetails");
         return null;
       }
-      
+
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       if (!userDoc.exists) {
         print("User document not found for ${user.uid}");
         return null;
       }
-      
+
       final userData = userDoc.data();
       if (userData == null) {
         return null;
       }
-      
+
       // If user has employeeId, get additional employee details
       final employeeId = userData['employeeId'] as String?;
       if (employeeId != null && employeeId.isNotEmpty) {
-        final employeeDoc = await _firestore.collection('employees').doc(employeeId).get();
+        final employeeDoc =
+            await _firestore.collection('employees').doc(employeeId).get();
         if (employeeDoc.exists) {
           final employeeData = employeeDoc.data();
           if (employeeData != null) {
@@ -662,7 +666,7 @@ class FirebaseService {
           }
         }
       }
-      
+
       return userData;
     } catch (e) {
       print("Error in getCurrentUserDetails: $e");
@@ -680,7 +684,7 @@ class FirebaseService {
         print("Warning: Empty errorId provided to uploadErrorScreenshot");
         throw ArgumentError("Error ID cannot be empty");
       }
-      
+
       final ref = _storage.ref('error_screenshots/$errorId.png');
       await ref.putData(screenshotBytes);
       return await ref.getDownloadURL();
@@ -696,7 +700,7 @@ class FirebaseService {
         print("Warning: Empty path provided to uploadFile");
         throw ArgumentError("File path cannot be empty");
       }
-      
+
       final ref = _storage.ref(path);
       await ref.putData(fileBytes);
       return await ref.getDownloadURL();
@@ -705,7 +709,7 @@ class FirebaseService {
       throw e;
     }
   }
-  
+
   // Upload supporting document for leave application
   Future<String> uploadLeaveDocument(
       Uint8List documentBytes, String leaveId, String fileName) async {
@@ -714,24 +718,24 @@ class FirebaseService {
         print("Warning: Empty leaveId provided to uploadLeaveDocument");
         throw ArgumentError("Leave ID cannot be empty");
       }
-      
+
       if (fileName.isEmpty) {
         print("Warning: Empty fileName provided to uploadLeaveDocument");
         throw ArgumentError("File name cannot be empty");
       }
-      
+
       final path = 'leave_documents/$leaveId/$fileName';
       final ref = _storage.ref(path);
       await ref.putData(documentBytes);
       final downloadUrl = await ref.getDownloadURL();
-      
+
       // Update leave application with document URL
       await _firestore.collection('leaveApplications').doc(leaveId).update({
         'documentUrl': downloadUrl,
         'documentName': fileName,
         'updatedAt': Timestamp.now(),
       });
-      
+
       return downloadUrl;
     } catch (e) {
       print("Error in uploadLeaveDocument for $leaveId: $e");
@@ -751,12 +755,16 @@ class FirebaseService {
         final id = emp['id'];
         if (id == null || id.toString().isEmpty) continue;
         final docRef = _firestore.collection('employees').doc(id);
-        batch.set(docRef, {
-          ...emp,
-          'updatedAt': Timestamp.now(),
-          if (!emp.containsKey('createdAt')) 'createdAt': Timestamp.now(),
-          if (!emp.containsKey('leaveBalances')) 'leaveBalances': defaultLeaveBalances,
-        }, SetOptions(merge: true));
+        batch.set(
+            docRef,
+            {
+              ...emp,
+              'updatedAt': Timestamp.now(),
+              if (!emp.containsKey('createdAt')) 'createdAt': Timestamp.now(),
+              if (!emp.containsKey('leaveBalances'))
+                'leaveBalances': defaultLeaveBalances,
+            },
+            SetOptions(merge: true));
         successCount++;
       }
       await batch.commit();
@@ -773,38 +781,69 @@ class FirebaseService {
     }
   }
 
+  /// Corrected batch import function to prevent inconsistent date formats.
   Future<Map<String, dynamic>> batchImportLeaveApplications(
       List<Map<String, dynamic>> applications) async {
     try {
       final batch = _firestore.batch();
       int successCount = 0, duplicateCount = 0;
+
       for (var app in applications) {
         final employeeId = app['employeeId'] as String?;
-        final startTs = app['startDate'] as Timestamp?;
-        final endTs = app['endDate'] as Timestamp?;
-        if (employeeId == null || employeeId.isEmpty || startTs == null || endTs == null) continue;
-        // ← FIX: convert Timestamp → DateTime → millis
-        final startMs = startTs.toDate().millisecondsSinceEpoch;
-        final endMs = endTs.toDate().millisecondsSinceEpoch;
-        final leaveId = '${employeeId}_${startMs}_${endMs}';
-        final existing = await _firestore
-            .collection('leaveApplications')
-            .doc(leaveId)
-            .get();
+
+        // Safely parse start and end dates to get DateTime objects, regardless of input type
+        DateTime? startDate;
+        if (app['startDate'] is Timestamp) {
+          startDate = (app['startDate'] as Timestamp).toDate();
+        } else if (app['startDate'] is int) {
+          startDate = DateTime.fromMillisecondsSinceEpoch(app['startDate']);
+        }
+
+        DateTime? endDate;
+        if (app['endDate'] is Timestamp) {
+          endDate = (app['endDate'] as Timestamp).toDate();
+        } else if (app['endDate'] is int) {
+          endDate = DateTime.fromMillisecondsSinceEpoch(app['endDate']);
+        }
+
+        // Skip records with invalid or missing critical data
+        if (employeeId == null ||
+            employeeId.isEmpty ||
+            startDate == null ||
+            endDate == null) {
+          continue;
+        }
+
+        // Create a unique document ID
+        final leaveId =
+            '${employeeId}_${startDate.millisecondsSinceEpoch}_${endDate.millisecondsSinceEpoch}';
+        final docRef = _firestore.collection('leaveApplications').doc(leaveId);
+
+        final existing = await docRef.get();
         if (existing.exists) {
           duplicateCount++;
           continue;
         }
-        batch.set(
-          _firestore.collection('leaveApplications').doc(leaveId),
-          {
-            ...app,
-            'createdAt': app.containsKey('createdAt')
-                ? app['createdAt']
-                : Timestamp.now(),
-            'updatedAt': Timestamp.now(),
-          },
-        );
+
+        // Create a mutable copy of the app data to ensure all date fields are converted to Timestamps
+        final dataToWrite = Map<String, dynamic>.from(app);
+        dataToWrite['startDate'] = Timestamp.fromDate(startDate);
+        dataToWrite['endDate'] = Timestamp.fromDate(endDate);
+
+        // Also handle `createdAt` if it exists, otherwise create it
+        if (dataToWrite.containsKey('createdAt') &&
+            dataToWrite['createdAt'] is int) {
+          dataToWrite['createdAt'] =
+              Timestamp.fromMillisecondsSinceEpoch(dataToWrite['createdAt']);
+        } else if (!dataToWrite.containsKey('createdAt') ||
+            dataToWrite['createdAt'] == null) {
+          dataToWrite['createdAt'] = Timestamp.now();
+        }
+
+        // Always set/overwrite the `updatedAt` field on write
+        dataToWrite['updatedAt'] = Timestamp.now();
+
+        batch.set(docRef, dataToWrite);
         successCount++;
       }
       await batch.commit();
@@ -830,25 +869,32 @@ class FirebaseService {
       final snap = await _firestore.collection('leaveApplications').get();
       int pending = 0, approved = 0, rejected = 0, cancelled = 0;
       int annual = 0, medical = 0, emergency = 0, other = 0;
-      
+
       for (var doc in snap.docs) {
         final data = doc.data();
         final status = data['status'] as String? ?? '';
         final type = data['leaveType'] as String? ?? '';
-        
+
         // Count by status
-        if (status == 'Pending') pending++;
-        else if (status == 'Approved') approved++;
-        else if (status == 'Rejected') rejected++;
+        if (status == 'Pending')
+          pending++;
+        else if (status == 'Approved')
+          approved++;
+        else if (status == 'Rejected')
+          rejected++;
         else if (status == 'Cancelled') cancelled++;
-        
+
         // Count by type
-        if (type.toLowerCase().contains('annual')) annual++;
-        else if (type.toLowerCase().contains('medical')) medical++;
-        else if (type.toLowerCase().contains('emergency')) emergency++;
-        else other++;
+        if (type.toLowerCase().contains('annual'))
+          annual++;
+        else if (type.toLowerCase().contains('medical'))
+          medical++;
+        else if (type.toLowerCase().contains('emergency'))
+          emergency++;
+        else
+          other++;
       }
-      
+
       return {
         'total': snap.docs.length,
         'status': {
@@ -869,14 +915,14 @@ class FirebaseService {
       return {
         'total': 0,
         'status': {
-          'pending': 0, 
-          'approved': 0, 
+          'pending': 0,
+          'approved': 0,
           'rejected': 0,
           'cancelled': 0,
         },
         'type': {
-          'annual': 0, 
-          'medical': 0, 
+          'annual': 0,
+          'medical': 0,
           'emergency': 0,
           'other': 0,
         },
@@ -884,59 +930,68 @@ class FirebaseService {
     }
   }
 
-  Future<Map<String, dynamic>> getEmployeeLeaveStatistics(String employeeId) async {
+  Future<Map<String, dynamic>> getEmployeeLeaveStatistics(
+      String employeeId) async {
     try {
       // Add check for empty employee ID
       if (employeeId.isEmpty) {
-        print("Warning: Empty employeeId provided to getEmployeeLeaveStatistics");
+        print(
+            "Warning: Empty employeeId provided to getEmployeeLeaveStatistics");
         return {
           'total': 0,
           'status': {
-            'pending': 0, 
-            'approved': 0, 
+            'pending': 0,
+            'approved': 0,
             'rejected': 0,
             'cancelled': 0,
           },
           'type': {
-            'annual': 0, 
-            'medical': 0, 
+            'annual': 0,
+            'medical': 0,
             'emergency': 0,
             'other': 0,
           },
           'balance': defaultLeaveBalances,
         };
       }
-      
+
       // Get leave applications
       final snap = await _firestore
           .collection('leaveApplications')
           .where('employeeId', isEqualTo: employeeId)
           .get();
-      
+
       int pending = 0, approved = 0, rejected = 0, cancelled = 0;
       int annual = 0, medical = 0, emergency = 0, other = 0;
-      
+
       for (var doc in snap.docs) {
         final data = doc.data();
         final status = data['status'] as String? ?? '';
         final type = data['leaveType'] as String? ?? '';
-        
+
         // Count by status
-        if (status == 'Pending') pending++;
-        else if (status == 'Approved') approved++;
-        else if (status == 'Rejected') rejected++;
+        if (status == 'Pending')
+          pending++;
+        else if (status == 'Approved')
+          approved++;
+        else if (status == 'Rejected')
+          rejected++;
         else if (status == 'Cancelled') cancelled++;
-        
+
         // Count by type
-        if (type.toLowerCase().contains('annual')) annual++;
-        else if (type.toLowerCase().contains('medical')) medical++;
-        else if (type.toLowerCase().contains('emergency')) emergency++;
-        else other++;
+        if (type.toLowerCase().contains('annual'))
+          annual++;
+        else if (type.toLowerCase().contains('medical'))
+          medical++;
+        else if (type.toLowerCase().contains('emergency'))
+          emergency++;
+        else
+          other++;
       }
-      
+
       // Get employee leave balances
       final leaveBalances = await getEmployeeLeaveBalances(employeeId);
-      
+
       return {
         'total': snap.docs.length,
         'status': {
@@ -958,14 +1013,14 @@ class FirebaseService {
       return {
         'total': 0,
         'status': {
-          'pending': 0, 
-          'approved': 0, 
+          'pending': 0,
+          'approved': 0,
           'rejected': 0,
           'cancelled': 0,
         },
         'type': {
-          'annual': 0, 
-          'medical': 0, 
+          'annual': 0,
+          'medical': 0,
           'emergency': 0,
           'other': 0,
         },
@@ -973,54 +1028,62 @@ class FirebaseService {
       };
     }
   }
-  
+
   // Calculate remaining leave days for an employee
-  Future<Map<String, int>> calculateRemainingLeaveDays(String employeeId) async {
+  Future<Map<String, int>> calculateRemainingLeaveDays(
+      String employeeId) async {
     try {
       // Add check for empty employee ID
       if (employeeId.isEmpty) {
-        print("Warning: Empty employeeId provided to calculateRemainingLeaveDays");
+        print(
+            "Warning: Empty employeeId provided to calculateRemainingLeaveDays");
         return Map<String, int>.from(defaultLeaveBalances);
       }
-      
+
       // Get employee leave balances
       final leaveBalances = await getEmployeeLeaveBalances(employeeId);
-      
+
       // Get approved and pending leave applications for this year
       final now = DateTime.now();
       final startOfYear = DateTime(now.year, 1, 1);
       final endOfYear = DateTime(now.year, 12, 31);
-      
+
       final approvedLeaves = await _firestore
           .collection('leaveApplications')
           .where('employeeId', isEqualTo: employeeId)
           .where('status', isEqualTo: 'Approved')
-          .where('startDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfYear))
-          .where('startDate', isLessThanOrEqualTo: Timestamp.fromDate(endOfYear))
+          .where('startDate',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfYear))
+          .where('startDate',
+              isLessThanOrEqualTo: Timestamp.fromDate(endOfYear))
           .get();
-      
+
       final pendingLeaves = await _firestore
           .collection('leaveApplications')
           .where('employeeId', isEqualTo: employeeId)
           .where('status', isEqualTo: 'Pending')
-          .where('startDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfYear))
-          .where('startDate', isLessThanOrEqualTo: Timestamp.fromDate(endOfYear))
+          .where('startDate',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfYear))
+          .where('startDate',
+              isLessThanOrEqualTo: Timestamp.fromDate(endOfYear))
           .get();
-      
+
       // Calculate used leave days by type
       int usedAnnual = 0, usedMedical = 0, usedEmergency = 0;
-      
+
       // Helper function to count leave days
       void countLeaveDays(QuerySnapshot snap) {
         for (var doc in snap.docs) {
           final data = doc.data() as Map<String, dynamic>;
           final type = data['leaveType'] as String? ?? '';
-          final startDate = (data['startDate'] as Timestamp?)?.toDate() ?? DateTime.now();
-          final endDate = (data['endDate'] as Timestamp?)?.toDate() ?? DateTime.now();
-          
+          final startDate =
+              (data['startDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+          final endDate =
+              (data['endDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+
           // Calculate days (inclusive)
           final days = endDate.difference(startDate).inDays + 1;
-          
+
           // Add to appropriate counter
           if (type.toLowerCase().contains('annual')) {
             usedAnnual += days;
@@ -1031,63 +1094,72 @@ class FirebaseService {
           }
         }
       }
-      
+
       // Count approved and pending leaves
       countLeaveDays(approvedLeaves);
       countLeaveDays(pendingLeaves);
-      
+
       // Calculate remaining days
-      final annualBalance = leaveBalances['annual'] ?? defaultLeaveBalances['annual'] ?? 0;
-      final medicalBalance = leaveBalances['medical'] ?? defaultLeaveBalances['medical'] ?? 0;
-      final emergencyBalance = leaveBalances['emergency'] ?? defaultLeaveBalances['emergency'] ?? 0;
-      
+      final annualBalance =
+          leaveBalances['annual'] ?? defaultLeaveBalances['annual'] ?? 0;
+      final medicalBalance =
+          leaveBalances['medical'] ?? defaultLeaveBalances['medical'] ?? 0;
+      final emergencyBalance =
+          leaveBalances['emergency'] ?? defaultLeaveBalances['emergency'] ?? 0;
+
       final remaining = {
         'annual': annualBalance - usedAnnual,
         'medical': medicalBalance - usedMedical,
         'emergency': emergencyBalance - usedEmergency,
       };
-      
+
       return remaining;
     } catch (e) {
       print("Error in calculateRemainingLeaveDays for $employeeId: $e");
       return defaultLeaveBalances;
     }
   }
-  
+
   // Get department leave statistics
-  Future<Map<String, dynamic>> getDepartmentLeaveStatistics(String department) async {
+  Future<Map<String, dynamic>> getDepartmentLeaveStatistics(
+      String department) async {
     try {
       if (department.isEmpty) {
-        print("Warning: Empty department provided to getDepartmentLeaveStatistics");
+        print(
+            "Warning: Empty department provided to getDepartmentLeaveStatistics");
         return {
           'total': 0,
           'status': {'pending': 0, 'approved': 0, 'rejected': 0},
           'type': {'annual': 0, 'medical': 0, 'emergency': 0},
         };
       }
-      
+
       final snap = await _firestore
           .collection('leaveApplications')
           .where('department', isEqualTo: department)
           .get();
-      
+
       int pending = 0, approved = 0, rejected = 0;
       int annual = 0, medical = 0, emergency = 0;
-      
+
       for (var doc in snap.docs) {
         final data = doc.data();
         final status = data['status'] as String? ?? '';
         final type = data['leaveType'] as String? ?? '';
-        
-        if (status == 'Pending') pending++;
-        else if (status == 'Approved') approved++;
+
+        if (status == 'Pending')
+          pending++;
+        else if (status == 'Approved')
+          approved++;
         else if (status == 'Rejected') rejected++;
-        
-        if (type.toLowerCase().contains('annual')) annual++;
-        else if (type.toLowerCase().contains('medical')) medical++;
+
+        if (type.toLowerCase().contains('annual'))
+          annual++;
+        else if (type.toLowerCase().contains('medical'))
+          medical++;
         else if (type.toLowerCase().contains('emergency')) emergency++;
       }
-      
+
       return {
         'total': snap.docs.length,
         'status': {
@@ -1114,7 +1186,7 @@ class FirebaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // Search and Filtering
   // ────────────────────────────────────────────────────────────────────────────
-  
+
   // Get filtered leave applications by status
   Stream<List<LeaveApplication>> getLeaveApplicationsByStatus(String status) {
     try {
@@ -1122,42 +1194,41 @@ class FirebaseService {
         print("Warning: Empty status provided to getLeaveApplicationsByStatus");
         return Stream.value([]);
       }
-      
+
       return _firestore
           .collection('leaveApplications')
           .where('status', isEqualTo: status)
           .orderBy('createdAt', descending: true)
           .snapshots()
           .handleError((error) {
-            print("Error in getLeaveApplicationsByStatus for $status: $error");
-            if (error.toString().contains('index')) {
-              print("This query requires a composite index on (status, createdAt)");
-            }
-            return Stream.value([]);
-          })
-          .map((snapshot) {
-            try {
-              return snapshot.docs
-                  .map((doc) => LeaveApplication.fromFirestore(doc))
-                  .toList();
-            } catch (e) {
-              print("Error mapping documents in getLeaveApplicationsByStatus: $e");
-              return <LeaveApplication>[];
-            }
-          });
+        print("Error in getLeaveApplicationsByStatus for $status: $error");
+        if (error.toString().contains('index')) {
+          print("This query requires a composite index on (status, createdAt)");
+        }
+        return Stream.value([]);
+      }).map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => LeaveApplication.fromFirestore(doc))
+              .toList();
+        } catch (e) {
+          print("Error mapping documents in getLeaveApplicationsByStatus: $e");
+          return <LeaveApplication>[];
+        }
+      });
     } catch (e) {
       print("Error setting up status filtered leave applications stream: $e");
       return Stream<List<LeaveApplication>>.empty();
     }
   }
-  
+
   // Get leave applications by date range
   Stream<List<LeaveApplication>> getLeaveApplicationsByDateRange(
       DateTime startDate, DateTime endDate) {
     try {
       final startTimestamp = Timestamp.fromDate(startDate);
       final endTimestamp = Timestamp.fromDate(endDate);
-      
+
       return _firestore
           .collection('leaveApplications')
           .where('startDate', isGreaterThanOrEqualTo: startTimestamp)
@@ -1165,117 +1236,120 @@ class FirebaseService {
           .orderBy('startDate')
           .snapshots()
           .handleError((error) {
-            print("Error in getLeaveApplicationsByDateRange: $error");
-            if (error.toString().contains('index')) {
-              print("This query requires a composite index on startDate");
-            }
-            return Stream.value([]);
-          })
-          .map((snapshot) {
-            try {
-              return snapshot.docs
-                  .map((doc) => LeaveApplication.fromFirestore(doc))
-                  .toList();
-            } catch (e) {
-              print("Error mapping documents in getLeaveApplicationsByDateRange: $e");
-              return <LeaveApplication>[];
-            }
-          });
+        print("Error in getLeaveApplicationsByDateRange: $error");
+        if (error.toString().contains('index')) {
+          print("This query requires a composite index on startDate");
+        }
+        return Stream.value([]);
+      }).map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => LeaveApplication.fromFirestore(doc))
+              .toList();
+        } catch (e) {
+          print(
+              "Error mapping documents in getLeaveApplicationsByDateRange: $e");
+          return <LeaveApplication>[];
+        }
+      });
     } catch (e) {
-      print("Error setting up date range filtered leave applications stream: $e");
+      print(
+          "Error setting up date range filtered leave applications stream: $e");
       return Stream<List<LeaveApplication>>.empty();
     }
   }
-  
+
   // Get leave applications by type
   Stream<List<LeaveApplication>> getLeaveApplicationsByType(String leaveType) {
     try {
       if (leaveType.isEmpty) {
-        print("Warning: Empty leaveType provided to getLeaveApplicationsByType");
+        print(
+            "Warning: Empty leaveType provided to getLeaveApplicationsByType");
         return Stream.value([]);
       }
-      
+
       return _firestore
           .collection('leaveApplications')
           .where('leaveType', isEqualTo: leaveType)
           .orderBy('createdAt', descending: true)
           .snapshots()
           .handleError((error) {
-            print("Error in getLeaveApplicationsByType for $leaveType: $error");
-            if (error.toString().contains('index')) {
-              print("This query requires a composite index on (leaveType, createdAt)");
-            }
-            return Stream.value([]);
-          })
-          .map((snapshot) {
-            try {
-              return snapshot.docs
-                  .map((doc) => LeaveApplication.fromFirestore(doc))
-                  .toList();
-            } catch (e) {
-              print("Error mapping documents in getLeaveApplicationsByType: $e");
-              return <LeaveApplication>[];
-            }
-          });
+        print("Error in getLeaveApplicationsByType for $leaveType: $error");
+        if (error.toString().contains('index')) {
+          print(
+              "This query requires a composite index on (leaveType, createdAt)");
+        }
+        return Stream.value([]);
+      }).map((snapshot) {
+        try {
+          return snapshot.docs
+              .map((doc) => LeaveApplication.fromFirestore(doc))
+              .toList();
+        } catch (e) {
+          print("Error mapping documents in getLeaveApplicationsByType: $e");
+          return <LeaveApplication>[];
+        }
+      });
     } catch (e) {
       print("Error setting up type filtered leave applications stream: $e");
       return Stream<List<LeaveApplication>>.empty();
     }
   }
-  
+
   // Search employees by name, ID or department
   Future<List<DocumentSnapshot>> searchEmployees(String query) async {
     try {
       query = query.toLowerCase();
-      
+
       // Since Firestore doesn't support case-insensitive search directly,
       // we need to fetch all employees and filter client-side
       final snapshot = await _firestore.collection('employees').get();
-      
+
       return snapshot.docs.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
         final name = (data['name'] as String? ?? '').toLowerCase();
         final id = (data['id'] as String? ?? '').toLowerCase();
         final department = (data['department'] as String? ?? '').toLowerCase();
-        
-        return name.contains(query) || 
-               id.contains(query) || 
-               department.contains(query);
+
+        return name.contains(query) ||
+            id.contains(query) ||
+            department.contains(query);
       }).toList();
     } catch (e) {
       print("Error in searchEmployees for '$query': $e");
       return [];
     }
   }
-  
+
   // Search leave applications
   Future<List<LeaveApplication>> searchLeaveApplications(String query) async {
     try {
       query = query.toLowerCase();
-      
+
       // Fetch all leave applications (could be optimized further if needed)
       final snapshot = await _firestore
           .collection('leaveApplications')
           .orderBy('createdAt', descending: true)
           .get();
-      
+
       final matchingDocs = snapshot.docs.where((doc) {
         final data = doc.data();
-        final employeeName = (data['employeeName'] as String? ?? '').toLowerCase();
+        final employeeName =
+            (data['employeeName'] as String? ?? '').toLowerCase();
         final employeeId = (data['employeeId'] as String? ?? '').toLowerCase();
         final leaveType = (data['leaveType'] as String? ?? '').toLowerCase();
         final status = (data['status'] as String? ?? '').toLowerCase();
         final reason = (data['reason'] as String? ?? '').toLowerCase();
         final department = (data['department'] as String? ?? '').toLowerCase();
-        
-        return employeeName.contains(query) || 
-               employeeId.contains(query) || 
-               leaveType.contains(query) ||
-               status.contains(query) ||
-               reason.contains(query) ||
-               department.contains(query);
+
+        return employeeName.contains(query) ||
+            employeeId.contains(query) ||
+            leaveType.contains(query) ||
+            status.contains(query) ||
+            reason.contains(query) ||
+            department.contains(query);
       }).toList();
-      
+
       return matchingDocs
           .map((doc) => LeaveApplication.fromFirestore(doc))
           .toList();

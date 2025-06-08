@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:dhl_leave_management/services/firebase_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:collection/collection.dart';
 
 class ImportScreen extends StatefulWidget {
   const ImportScreen({Key? key}) : super(key: key);
@@ -14,6 +14,9 @@ class ImportScreen extends StatefulWidget {
 }
 
 class _ImportScreenState extends State<ImportScreen> {
+  // Use the centralized FirebaseService for all database operations
+  final FirebaseService _firebaseService = FirebaseService();
+
   bool _isLoading = false;
   bool _isProcessing = false;
   String? _fileName;
@@ -52,45 +55,39 @@ class _ImportScreenState extends State<ImportScreen> {
 
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.any, 
-        withData: true, // Always load file bytes
+        type: FileType.any,
+        withData: true,
       );
-      
+
       if (result == null || result.files.isEmpty) {
         setState(() => _isLoading = false);
         return;
       }
 
-      final fileName = result.files.single.name;
-      _fileName = fileName;
-      
-      _log.add('📁 Selected file: $fileName');
+      final file = result.files.single;
+      _fileName = file.name;
+      _log.add('📁 Selected file: $_fileName');
 
-      // Get file bytes directly
-      final bytes = result.files.single.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        // Try to read from path if available
-        if (result.files.single.path != null) {
-          final path = result.files.single.path!;
-          try {
-            final fileBytes = await File(path).readAsBytes();
-            await _parseFileBytes(fileBytes);
-          } catch (e) {
-            _log.add('❌ Failed to read file from path: $e');
-          }
-        } else {
-          _log.add('❌ No file data available');
+      final bytes = file.bytes;
+      if (bytes != null && bytes.isNotEmpty) {
+        await _parseFileBytes(bytes);
+      } else if (file.path != null) {
+        final path = file.path!;
+        try {
+          final fileBytes = await File(path).readAsBytes();
+          await _parseFileBytes(fileBytes);
+        } catch (e) {
+          _log.add('❌ Failed to read file from path: $e');
         }
       } else {
-        // Use bytes directly
-        await _parseFileBytes(bytes);
+        _log.add('❌ No file data available');
       }
 
       if (_rows != null && _rows!.isNotEmpty) {
         _totalRows = _rows!.length;
         _log.add('📋 Found $_totalRows records for import');
       } else {
-        _log.add('⚠️ No data rows were found after parsing');
+        _log.add('⚠️ No valid data rows were found after parsing');
       }
     } catch (e) {
       _log.add('❌ Failed to read file: $e');
@@ -100,10 +97,7 @@ class _ImportScreenState extends State<ImportScreen> {
   }
 
   Future<void> _parseFileBytes(List<int> bytes) async {
-    // Skip Excel parsing completely and try direct text extraction
     String content = '';
-    
-    // Try different encodings to extract text content
     try {
       content = utf8.decode(bytes);
       _log.add('✅ Successfully decoded file as UTF-8');
@@ -111,84 +105,59 @@ class _ImportScreenState extends State<ImportScreen> {
       try {
         content = latin1.decode(bytes);
         _log.add('✅ Successfully decoded file as Latin-1');
-      } catch (_) {
-        // Last resort: try to extract printable ASCII characters
-        _log.add('⚠️ Standard decoding failed, trying ASCII extraction');
-        content = _extractPrintableAscii(bytes);
+      } catch (e) {
+        _log.add('❌ File decoding failed: $e');
+        return;
       }
     }
-    
+
     if (content.isEmpty) {
       _log.add('❌ Could not extract any text from the file');
       return;
     }
-    
+
     await _parseTextContent(content);
-  }
-  
-  String _extractPrintableAscii(List<int> bytes) {
-    // Extract printable ASCII characters and common delimiters
-    return String.fromCharCodes(bytes.where((byte) => 
-      (byte >= 32 && byte <= 126) || // Printable ASCII
-      byte == 9 ||  // Tab
-      byte == 10 || // Line feed
-      byte == 13)); // Carriage return
   }
 
   Future<void> _parseTextContent(String content) async {
     try {
-      // Split into lines
       final lines = LineSplitter.split(content).toList();
       if (lines.isEmpty) {
         _log.add('❌ No content lines found');
         return;
       }
-      
+
       _log.add('📄 Found ${lines.length} lines in file');
-      
-      // Detect delimiter - try tab first, then comma
-      String delimiter = _detectDelimiter(lines[0]);
-      _log.add('📄 Using ${delimiter == '\t' ? 'tab' : delimiter == ',' ? 'comma' : 'custom'} delimiter');
-      
+
+      final delimiter = _detectDelimiter(lines[0]);
+      _log.add('📄 Using ${delimiter == '\t' ? 'tab' : 'comma'} as delimiter');
+
       final List<List<String>> parsedRows = [];
-      
-      // Parse header row to validate expected columns
-      if (lines.isNotEmpty) {
-        final headerFields = _splitLine(lines[0], delimiter);
-        _log.add('📑 Header: ${headerFields.join(" | ")}');
-        
-        // Check expected columns are present
-        if (headerFields.length < _colIdx.length) {
-          _log.add('⚠️ Warning: Header has fewer columns (${headerFields.length}) than expected (${_colIdx.length})');
-        }
-      }
-      
-      // Skip the header row
+
+      // Skip the header row (index 0)
       for (var i = 1; i < lines.length; i++) {
         final line = lines[i].trim();
         if (line.isEmpty) continue;
-        
+
         final fields = _splitLine(line, delimiter);
-        
-        // Skip rows with insufficient data
-        if (fields.length < _colIdx.length) {
-          _log.add('⚠️ Row ${i+1} has insufficient data (${fields.length} columns)');
+
+        if (fields.length < 6) {
+          _log.add(
+              '⚠️ Row ${i + 1}: Skipped due to insufficient data (${fields.length} columns)');
           continue;
         }
-        
-        // Add row
+
         parsedRows.add(fields);
       }
-      
+
       if (parsedRows.isEmpty) {
         _log.add('❌ No valid data rows found after parsing');
         return;
       }
-      
+
       _rows = parsedRows;
       _log.add('✅ Successfully parsed ${parsedRows.length} data rows');
-      
-      // Show sample of first row
+
       if (parsedRows.isNotEmpty) {
         _log.add('📝 Sample: ${parsedRows[0].join(" | ")}');
       }
@@ -196,273 +165,154 @@ class _ImportScreenState extends State<ImportScreen> {
       _log.add('❌ Text parsing error: $e');
     }
   }
-  
+
   String _detectDelimiter(String line) {
-    // Try to auto-detect the delimiter
-    final delimiters = ['\t', ',', ';', '|'];
-    Map<String, int> counts = {};
-    
-    for (var delimiter in delimiters) {
-      counts[delimiter] = line.split(delimiter).length - 1;
-    }
-    
-    // Find the delimiter that appears most frequently
-    String? maxDelimiter;
-    int maxCount = 0;
-    
-    counts.forEach((delimiter, count) {
-      if (count > maxCount) {
-        maxCount = count;
-        maxDelimiter = delimiter;
-      }
-    });
-    
-    return maxDelimiter ?? '\t'; // Default to tab if no clear winner
+    return line.contains('\t') ? '\t' : ',';
   }
-  
+
   List<String> _splitLine(String line, String delimiter) {
-    // Handle quoted fields when using comma as delimiter
-    if (delimiter == ',' && line.contains('"')) {
-      return _parseCSVLine(line);
-    }
-    
-    // Standard split
-    return line.split(delimiter)
-        .map((field) => field.trim())
+    return line
+        .split(delimiter)
+        .map((field) => field.trim().replaceAll('"', ''))
         .toList();
-  }
-  
-  // Advanced CSV parsing with quote handling
-  List<String> _parseCSVLine(String line) {
-    List<String> result = [];
-    bool inQuotes = false;
-    String currentField = '';
-    
-    for (int i = 0; i < line.length; i++) {
-      final char = line[i];
-      
-      if (char == '"') {
-        if (i < line.length - 1 && line[i + 1] == '"') {
-          // Handle escaped quotes (two consecutive quotes)
-          currentField += '"';
-          i++; // Skip the next quote
-        } else {
-          // Toggle quote state
-          inQuotes = !inQuotes;
-        }
-      } else if (char == ',' && !inQuotes) {
-        // End of field
-        result.add(currentField.trim());
-        currentField = '';
-      } else {
-        currentField += char;
-      }
-    }
-    
-    // Add the last field
-    result.add(currentField.trim());
-    return result;
   }
 
   Future<void> _importToFirestore() async {
     if (_rows == null || _rows!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No data to import'),
-          backgroundColor: Colors.red,
-        ),
+            content: Text('No data to import'), backgroundColor: Colors.red),
       );
       return;
     }
 
     setState(() {
       _isProcessing = true;
-      _processed = 0;
-      _successCount = 0;
-      _failCount = 0;
-      _duplicateCount = 0;
       _log.clear();
-      _newEmployees.clear();
-      _progress = 0;
+      _log.add('🚀 Starting import process...');
     });
 
-    final col = FirebaseFirestore.instance.collection('leaveApplications');
-    final empCol = FirebaseFirestore.instance.collection('employees');
-
-    // First, get all existing leave records to check for duplicates
-    _log.add('📊 Checking for existing records...');
-    
-    // Create a map to store document IDs for faster duplicate checking
-    // This avoids making a separate Firestore query for each row
-    final Map<String, bool> existingDocIds = {};
-    
-    try {
-      // Query all leave applications
-      final leaveSnapshot = await col.get();
-      
-      for (var doc in leaveSnapshot.docs) {
-        existingDocIds[doc.id] = true;
-      }
-      
-      _log.add('📊 Found ${existingDocIds.length} existing leave records');
-    } catch (e) {
-      _log.add('⚠️ Error fetching existing records: $e');
-      // Continue with import, but duplicate checking may not work correctly
-    }
+    final List<Map<String, dynamic>> applicationsToImport = [];
+    final List<Map<String, dynamic>> employeesToImport = [];
 
     for (int i = 0; i < _rows!.length; i++) {
       final row = _rows![i];
       try {
-        // Safety check for row length
         if (row.length <= _colIdx['status']!) {
-          throw 'Row has insufficient data';
+          _log.add('❌ Row ${i + 1}: Skipped due to insufficient columns.');
+          _failCount++;
+          continue;
         }
 
         final name = row[_colIdx['employeeName']!].toString().trim();
         final id = row[_colIdx['employeeId']!].toString().trim();
         final type = row[_colIdx['leaveType']!].toString().trim();
-        final s = row[_colIdx['startDate']!].toString().trim();
-        final e = row[_colIdx['endDate']!].toString().trim();
-        final st = row[_colIdx['status']!].toString().trim();
+        final startDateStr = row[_colIdx['startDate']!].toString().trim();
+        final endDateStr = row[_colIdx['endDate']!].toString().trim();
+        final status = row[_colIdx['status']!].toString().trim();
 
-        // Skip rows with empty essential fields
-        if (name.isEmpty || id.isEmpty || type.isEmpty || s.isEmpty || e.isEmpty || st.isEmpty) {
-          _log.add('⚠️ Row ${i + 1}: Skipped due to missing data');
+        if (id.isEmpty ||
+            name.isEmpty ||
+            startDateStr.isEmpty ||
+            endDateStr.isEmpty) {
+          _log.add(
+              '❌ Row ${i + 1}: Skipped due to missing essential data (ID, Name, or Dates).');
           _failCount++;
           continue;
         }
-        
-        DateTime? start = _tryParse(s);
-        if (start == null) {
-          _log.add('⚠️ Failed to parse start date: $s');
-          throw 'Invalid start date [$s]';
-        }
-        
-        DateTime? end = _tryParse(e);
-        if (end == null) {
-          _log.add('⚠️ Failed to parse end date: $e');
-          throw 'Invalid end date [$e]';
-        }
 
-        // Generate document ID using the same logic as before
-        final docId = '${id}_${start.millisecondsSinceEpoch}_${end.millisecondsSinceEpoch}';
+        final startDate = _tryParse(startDateStr);
+        final endDate = _tryParse(endDateStr);
 
-        // Check if this record already exists
-        if (existingDocIds.containsKey(docId)) {
-          _log.add('📘 Row ${i + 1}: Skipped duplicate entry for $name / $id');
-          _duplicateCount++;
-          _processed++;
-          _progress = _processed / _totalRows;
-          setState(() {});
+        if (startDate == null || endDate == null) {
+          _log.add(
+              '❌ Row ${i + 1}: Failed to parse dates ($startDateStr, $endDateStr).');
+          _failCount++;
           continue;
         }
 
-        // Update employee record
-        await empCol.doc(id).set({
-          'id': id,
-          'name': name,
-          'updatedAt': Timestamp.now(),
-          'createdAt': Timestamp.now(),
-        }, SetOptions(merge: true));
+        // Add employee data for batch import
+        employeesToImport.add({'id': id, 'name': name});
 
-        // Create leave application
-        await col.doc(docId).set({
+        // Add leave application data for batch import
+        applicationsToImport.add({
           'employeeId': id,
           'employeeName': name,
           'leaveType': type,
-          'startDate': Timestamp.fromDate(start),
-          'endDate': Timestamp.fromDate(end),
-          'status': st,
-          'createdAt': Timestamp.now(),
-          'updatedAt': Timestamp.now(),
+          'startDate': Timestamp.fromDate(startDate),
+          'endDate': Timestamp.fromDate(endDate),
+          'status': status,
         });
-
-        // Add to our local tracking of existing docs to avoid double-imports in the same batch
-        existingDocIds[docId] = true;
-
-        _log.add('✅ Row ${i + 1}: $name / $id → $type [$st]');
-        _successCount++;
-        _newEmployees.add('$name ($id)');
-      } catch (err) {
-        _log.add('❌ Row ${i + 1}: $err');
+      } catch (e) {
+        _log.add('❌ Row ${i + 1}: An unexpected error occurred: $e');
         _failCount++;
-      } finally {
-        _processed++;
-        _progress = _processed / _totalRows;
-        setState(() {});
-        
-        // Add a small delay to avoid overwhelming Firestore
-        await Future.delayed(const Duration(milliseconds: 50));
       }
     }
 
-    setState(() => _isProcessing = false);
+    // Batch import employees first
+    _log.add(
+        '👥 Importing/updating ${_newEmployees.length} unique employees...');
+    final empResult =
+        await _firebaseService.batchImportEmployees(employeesToImport);
+    if (empResult['success']) {
+      _log.add(
+          '✅ Employee import successful. Processed: ${empResult['count']}');
+    } else {
+      _log.add('❌ Employee import failed: ${empResult['error']}');
+    }
+
+    // Now, batch import the leave applications using the robust service method
+    _log.add(
+        '📄 Importing ${applicationsToImport.length} leave applications...');
+    final result = await _firebaseService
+        .batchImportLeaveApplications(applicationsToImport);
+
+    setState(() {
+      if (result['success']) {
+        _successCount = result['count'] ?? 0;
+        _duplicateCount = result['duplicates'] ?? 0;
+        _log.add('🎉 Import finished!');
+        _log.add('   - Successful: $_successCount');
+        _log.add('   - Duplicates Skipped: $_duplicateCount');
+        _log.add('   - Failed: $_failCount');
+      } else {
+        _log.add('❌ Import failed: ${result['error']}');
+      }
+      _isProcessing = false;
+    });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Import finished: $_successCount added, $_duplicateCount skipped (duplicates), $_failCount failed'
-        ),
+            'Import finished: $_successCount added, $_duplicateCount skipped, $_failCount failed'),
         backgroundColor: _failCount == 0 ? Colors.green : Colors.orange,
-        duration: const Duration(seconds: 5),
       ),
     );
   }
 
   DateTime? _tryParse(String s) {
-    // Clean up the string
     s = s.trim();
-    
-    // Try multiple date formats to handle different Excel formats
     final formats = [
-      'M/d/yy', 'M/d/yyyy', 
-      'MM/dd/yy', 'MM/dd/yyyy',
-      'yyyy-MM-dd', 'dd/MM/yyyy', 
-      'yyyy/MM/dd', 'd-MMM-yyyy',
-      'd-MMM-yy', 'dd-MMM-yyyy',
-      'dd-MMM-yy', 'dd.MM.yyyy'
+      'M/d/yy',
+      'M/d/yyyy',
+      'MM/dd/yy',
+      'MM/dd/yyyy',
+      'yyyy-MM-dd',
+      'dd/MM/yyyy',
+      'yyyy/MM/dd',
+      'd-MMM-yyyy',
+      'd-MMM-yy',
+      'dd-MMM-yyyy',
+      'dd-MMM-yy',
+      'dd.MM.yyyy'
     ];
-    
+
     for (var fmt in formats) {
       try {
         return DateFormat(fmt).parseStrict(s);
-      } catch (_) {
-        // Try next format
-      }
+      } catch (_) {}
     }
-    
-    // If all formats fail, try a more flexible approach
-    try {
-      return DateTime.parse(s);
-    } catch (_) {}
-    
-    // Last resort: try some manual parsing for common formats
-    try {
-      // Check for MM/DD/YY format
-      if (s.contains('/')) {
-        final parts = s.split('/');
-        if (parts.length == 3) {
-          final month = int.tryParse(parts[0]);
-          final day = int.tryParse(parts[1]);
-          var year = int.tryParse(parts[2]);
-          
-          // Handle 2-digit years
-          if (year != null && year < 100) {
-            year += (year >= 50) ? 1900 : 2000;
-          }
-          
-          if (month != null && day != null && year != null) {
-            return DateTime(year, month, day);
-          }
-        }
-      }
-    } catch (_) {}
-    
     return null;
-  }
-
-  String _formatDate(DateTime date) {
-    return DateFormat('yyyy-MM-dd').format(date);
   }
 
   @override
@@ -486,7 +336,8 @@ class _ImportScreenState extends State<ImportScreen> {
               onPressed: _isLoading || _isProcessing ? null : _pickFile,
               icon: const Icon(Icons.upload_file),
               label: const Text('Select File'),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD40511)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD40511)),
             ),
           ]),
           const SizedBox(height: 16),
@@ -507,22 +358,31 @@ class _ImportScreenState extends State<ImportScreen> {
                           ),
                         )
                       : const Text('Import'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF43A047)),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF43A047)),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            if (_isProcessing) LinearProgressIndicator(value: _progress),
+            if (_isProcessing)
+              Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Column(
+                    children: [
+                      LinearProgressIndicator(value: _progress),
+                      Text('Processing: $_processed of $_totalRows')
+                    ],
+                  )),
           ] else if (_isLoading) ...[
             const Center(child: CircularProgressIndicator()),
           ],
           const SizedBox(height: 16),
-          if (!_isProcessing && (_successCount > 0 || _failCount > 0 || _duplicateCount > 0)) ...[
+          if (!_isProcessing &&
+              (_successCount > 0 || _failCount > 0 || _duplicateCount > 0)) ...[
             Text('✅ Imported: $_successCount'),
-            if (_duplicateCount > 0) Text('📘 Skipped duplicates: $_duplicateCount'),
+            if (_duplicateCount > 0)
+              Text('📘 Skipped duplicates: $_duplicateCount'),
             Text('❌ Failed: $_failCount'),
-            if (_newEmployees.isNotEmpty)
-              Text('👤 Updated/Created Employees: ${_newEmployees.length}'),
             const Divider(),
           ],
           Expanded(
